@@ -4,6 +4,9 @@ using Bio.Seq.FASTQ
 using Iterators
 
 
+supported_protocols()=["marsseq"]
+
+
 immutable Interpreter{N}
     insertread::Int
     insertpos::Range{Int}
