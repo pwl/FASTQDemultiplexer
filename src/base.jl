@@ -76,9 +76,12 @@ function interpret!{N}(ir::InterpretedRecord,
                        recs::NTuple{N,FASTQ.Record},
                        interpreter::Interpreter{N};
                        outputquality = true,
+                       writeumis = false,
                        kwargs...)
-    extract!(ir.umi, recs, interpreter.umipos)
     extract!(ir.cell, recs, interpreter.cellpos)
+    if writeumis
+        extract!(ir.umi, recs, interpreter.umipos)
+    end
 
     insertid = interpreter.insertread
     insertpos = interpreter.insertpos
@@ -106,6 +109,7 @@ function FASTQdemultiplex{N}(io::NTuple{N,IO},interpreter;
     records = map(x->FASTQ.Record(),io)
 
     cellhandles = Dict{Int,FASTQ.Writer}()
+    # TODO: IO is an abstract type, can this intruduce type instability?
     umihandles = Dict{Int,IO}()
     demultiplexcell = Demultiplexer(interpreter.cellbarcodes,n_max_errors=0)
     demultiplexumi  = Demultiplexer(interpreter.umibarcodes, n_max_errors=0)
@@ -116,11 +120,10 @@ function FASTQdemultiplex{N}(io::NTuple{N,IO},interpreter;
             read!(reader,record)
         end
 
-        interpret!(ir,records,interpreter; kwargs...)
+        interpret!(ir,records,interpreter; writeumis = writeumis, kwargs...)
         cellid, _ = demultiplex(demultiplexcell,ir.cell)
 
-        # TODO have a custom write function
-        # TODO write umis
+        # TODO: have a custom write function
         celldesc = get!(cellhandles,cellid) do
             FASTQ.Writer(celldescryptor(cellid))
         end
@@ -131,6 +134,10 @@ function FASTQdemultiplex{N}(io::NTuple{N,IO},interpreter;
                 umidescryptor(cellid)
             end
             write(umidesc,string(ir.umi)*"\n")
+            # for (rec,rng) in  zip(records,interpreter.umipos)
+            #     unsafe_write(umidesc,pointer(rec.data)+first(rec.sequence[rng])-1,length(rng))
+            # end
+            # write(umidesc,"\n")
         end
     end
 
