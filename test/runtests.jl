@@ -3,7 +3,7 @@ using Bio.Seq
 using Bio.Seq.FASTQ
 using Base.Test
 
-import FASTQDemultiplexer: iterate, Interpreter
+import FASTQDemultiplexer: demultiplex, Interpreter
 
 
 # we test the demultiplexer on the MARSSeq protocol
@@ -84,7 +84,7 @@ TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
 buffers=Dict()
 fastqstream(cellid) = buffers[cellid] = IOBuffer()
 
-iterate((R1(),R2()),interpreter,gendescryptor=fastqstream,closebuffers=false)
+demultiplex((R1(),R2()),interpreter,gendescryptor=fastqstream,closebuffers=false)
 # rewind the buffers so we can read them again
 map(seekstart,values(buffers))
 
@@ -97,7 +97,7 @@ map(seekstart,values(buffers))
 buffers=Dict()
 fastqstream(cellid) = buffers[cellid] = IOBuffer()
 
-iterate((R1(),R2()),interpreter,gendescryptor=fastqstream,closebuffers=false,outputquality=false)
+demultiplex((R1(),R2()),interpreter,gendescryptor=fastqstream,closebuffers=false,outputquality=false)
 # rewind the buffers so we can read them again
 map(seekstart,values(buffers))
 

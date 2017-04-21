@@ -99,11 +99,11 @@ function interpret!{N}(ir::InterpretedRecord,
 end
 
 
-function iterate{N}(io::NTuple{N,IO},interpreter;
-                    output="output",
-                    closebuffers=true,
-                    gendescryptor=openfile(output,interpreter),
-                    kwargs...)
+function demultiplex{N}(io::NTuple{N,IO},interpreter;
+                        output="output",
+                        closebuffers=true,
+                        gendescryptor=openfile(output,interpreter),
+                        kwargs...)
     readers = map(FASTQ.Reader,io)
     records = map(x->FASTQ.Record(),io)
 
