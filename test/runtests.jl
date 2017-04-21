@@ -3,10 +3,14 @@ using Bio.Seq
 using Bio.Seq.FASTQ
 using Base.Test
 
-import FASTQDemultiplexer: demultiplex, Interpreter
+import FASTQDemultiplexer: FASTQdemultiplex, Interpreter
+
+# TODO replace the hand-written entries with a programatically
+# generated strings.
+# TODO test the readstring instead of comapring the data?
 
 
-# we test the demultiplexer on the MARSSeq protocol
+# we test the FASTQdemultiplexer on a mock-up protocol
 
 cellbarcodes=DNASequence["AGTCCATGCT"]
 umibarcodes=DNASequence["AAAAAT"]
@@ -24,8 +28,7 @@ umiid = 1
 cellbarcode=cellbarcodes[cellid]
 umibarcode=umibarcodes[umiid]
 
-R1()=IOBuffer(
-"""
+R1()=IOBuffer("""
 @test:r1:1
 AAACCCCTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
 +
@@ -36,8 +39,7 @@ AAA$(cellbarcode[1:4])TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
 123456789012345678901234567890123456789012345678901234567890
 """)
 
-R2()=IOBuffer(
-"""
+R2()=IOBuffer("""
 @test:r2:1
 GGGGGGAAAAAA
 +
@@ -48,61 +50,117 @@ $(cellbarcode[5:10])$umibarcode
 123456789012
 """)
 
-cell1()=IOBuffer(
-"""
-@test:r1:2
-TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
-+
-89012345678901234567890123456789012345678901234567890
-""")
 
-unmatched()=IOBuffer(
-"""
-@test:r1:1
-TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
-+
-89012345678901234567890123456789012345678901234567890
-""")
+@testset "Basic functionality" begin
 
-cell1_noqual()=IOBuffer(
-"""
-@test:r1:2
-TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
-+
+    cell1()=IOBuffer("""
+    @test:r1:2
+    TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+    +
+    89012345678901234567890123456789012345678901234567890
+    """)
 
-""")
+    unmatched()=IOBuffer("""
+    @test:r1:1
+    TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+    +
+    89012345678901234567890123456789012345678901234567890
+    """)
 
-unmatched_noqual()=IOBuffer(
-"""
-@test:r1:1
-TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
-+
+    buffers=Dict()
+    fastqstream(cellid) = buffers[cellid] = IOBuffer()
 
-""")
+    FASTQdemultiplex((R1(),R2()),interpreter,celldescryptor=fastqstream,closebuffers=false)
+    # rewind the buffers so we can read them again
+    map(seekstart,values(buffers))
+
+    @test haskey(buffers,cellid)
+    @test haskey(buffers,0)
+
+    @test buffers[0].data == unmatched().data
+    @test buffers[1].data == cell1().data
+end
 
 
-buffers=Dict()
-fastqstream(cellid) = buffers[cellid] = IOBuffer()
+@testset "Disabling the quality output" begin
 
-demultiplex((R1(),R2()),interpreter,gendescryptor=fastqstream,closebuffers=false)
-# rewind the buffers so we can read them again
-map(seekstart,values(buffers))
+    cell1()=IOBuffer("""
+    @test:r1:2
+    TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+    +
 
-@test haskey(buffers,cellid)
-@test haskey(buffers,0)
+    """)
 
-@test buffers[0].data == unmatched().data
-@test buffers[1].data == cell1().data
+    unmatched()=IOBuffer("""
+    @test:r1:1
+    TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+    +
 
-buffers=Dict()
-fastqstream(cellid) = buffers[cellid] = IOBuffer()
+    """)
 
-demultiplex((R1(),R2()),interpreter,gendescryptor=fastqstream,closebuffers=false,outputquality=false)
-# rewind the buffers so we can read them again
-map(seekstart,values(buffers))
+    buffers=Dict()
+    fastqstream(cellid) = buffers[cellid] = IOBuffer()
 
-@test haskey(buffers,cellid)
-@test haskey(buffers,0)
+    FASTQdemultiplex((R1(),R2()),interpreter,celldescryptor=fastqstream,closebuffers=false,outputquality=false)
+    # rewind the buffers so we can read them again
+    map(seekstart,values(buffers))
 
-@test buffers[0].data == unmatched_noqual().data
-@test buffers[1].data == cell1_noqual().data
+    @test haskey(buffers,cellid)
+    @test haskey(buffers,0)
+
+    @test buffers[0].data == unmatched().data
+    @test buffers[1].data == cell1().data
+end
+
+
+@testset "UMI output" begin
+
+    cell1()=IOBuffer("""
+    @test:r1:2
+    TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+    +
+    89012345678901234567890123456789012345678901234567890
+    """)
+
+    unmatched()=IOBuffer("""
+    @test:r1:1
+    TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+    +
+    89012345678901234567890123456789012345678901234567890
+    """)
+
+    cell1umi()=IOBuffer("""
+    $umibarcode
+    """)
+
+    unmatchedumi()=IOBuffer("""
+    AAAAAA
+    """)
+
+    buffers=Dict()
+    fastqstream(cellid) = buffers[cellid] = IOBuffer()
+
+    umibuffers=Dict()
+    umistream(cellid) = umibuffers[cellid] = IOBuffer()
+
+    FASTQdemultiplex((R1(),R2()),interpreter,
+                     celldescryptor=fastqstream,
+                     umidescryptor=umistream,
+                     closebuffers=false,
+                     writeumis=true)
+    # rewind the buffers so we can read them again
+    map(seekstart,values(buffers))
+    map(seekstart,values(umibuffers))
+
+    @test haskey(buffers,cellid)
+    @test haskey(buffers,0)
+
+    @test buffers[0].data == unmatched().data
+    @test buffers[1].data == cell1().data
+
+    @test haskey(umibuffers,cellid)
+    @test haskey(umibuffers,0)
+
+    @test umibuffers[0].data == unmatchedumi().data
+    @test umibuffers[1].data == cell1umi().data
+end

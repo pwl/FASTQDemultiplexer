@@ -26,10 +26,6 @@ function Interpreter(id)
         cellbc = collect(map(join,product(poolbc,subcellbc)))
         umibc = generatebarcodes(6)
 
-        umi_n=6
-        cell_n=10
-        insert_n=53
-
         #     1  4   8           60
         # R1: XXXCCCCIIIIII---IIII
         #     1     7
@@ -99,15 +95,18 @@ function interpret!{N}(ir::InterpretedRecord,
 end
 
 
-function demultiplex{N}(io::NTuple{N,IO},interpreter;
-                        output="output",
-                        closebuffers=true,
-                        gendescryptor=openfile(output,interpreter),
-                        kwargs...)
+function FASTQdemultiplex{N}(io::NTuple{N,IO},interpreter;
+                             output="output",
+                             closebuffers=true,
+                             writeumis=false,
+                             celldescryptor=openfile(output,interpreter,ext=".fastq"),
+                             umidescryptor=openfile(output,interpreter,ext=".umi"),
+                             kwargs...)
     readers = map(FASTQ.Reader,io)
     records = map(x->FASTQ.Record(),io)
 
-    handles = Dict{Int,FASTQ.Writer}()
+    cellhandles = Dict{Int,FASTQ.Writer}()
+    umihandles = Dict{Int,IO}()
     demultiplexcell = Demultiplexer(interpreter.cellbarcodes,n_max_errors=0)
     demultiplexumi  = Demultiplexer(interpreter.umibarcodes, n_max_errors=0)
     ir = InterpretedRecord(interpreter)
@@ -122,27 +121,35 @@ function demultiplex{N}(io::NTuple{N,IO},interpreter;
 
         # TODO have a custom write function
         # TODO write umis
-        celldesc = get!(handles,cellid) do
-            FASTQ.Writer(gendescryptor(cellid))
+        celldesc = get!(cellhandles,cellid) do
+            FASTQ.Writer(celldescryptor(cellid))
         end
         write(celldesc,ir.output)
+
+        if writeumis
+            umidesc = get!(umihandles,cellid) do
+                umidescryptor(cellid)
+            end
+            write(umidesc,string(ir.umi)*"\n")
+        end
     end
 
     if closebuffers
-        map(close,values(handles))
+        map(close,values(cellhandles))
+        map(close,values(umihandles))
     end
 
     return nothing
 end
 
 
-function openfile(output,interpreter)
+function openfile(output,interpreter;ext=".fastq")
     function gendescryptor(cellid)
         if cellid > 0
             filename = string(interpreter.cellbarcodes[cellid])
         else
             filename = "unmatched"
         end
-        return open(joinpath(output,filename)*".fastq","w")
+        return open(joinpath(output,filename)*ext,"w")
     end
 end
