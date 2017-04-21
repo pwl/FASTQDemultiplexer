@@ -5,7 +5,8 @@ using Iterators
 
 
 immutable Interpreter{N}
-    insertpos::NTuple{N,Range{Int}}
+    insertread::Int
+    insertpos::Range{Int}
     cellpos::NTuple{N,Range{Int}}
     umipos::NTuple{N,Range{Int}}
     cellbarcodes::Vector{DNASequence}
@@ -34,7 +35,7 @@ function Interpreter(id)
         #     1     7
         # R2: CCCCCCUUUUUU
         return Interpreter{2}(
-            (8:60,1:0),
+            1,8:60,
             (4:7,1:6),
             (1:0,7:12),
             cellbc,
@@ -78,9 +79,22 @@ end
 function interpret!{N}(ir::InterpretedRecord,
                        recs::NTuple{N,FASTQ.Record},
                        interpreter::Interpreter{N};
+                       outputquality = true,
                        kwargs...)
-    extract!(ir.umi, recs,interpreter.umipos)
-    extract!(ir.cell, recs,interpreter.cellpos)
+    extract!(ir.umi, recs, interpreter.umipos)
+    extract!(ir.cell, recs, interpreter.cellpos)
+
+    insertid = interpreter.insertread
+    insertpos = interpreter.insertpos
+
+    # TODO how slow is the copy here?
+    ir.output = copy(recs[insertid])
+    ir.output.sequence = recs[insertid].sequence[insertpos]
+    if outputquality
+        ir.output.quality = recs[insertid].quality[insertpos]
+    else
+        ir.output.quality = 1:0
+    end
     return ir
 end
 
@@ -111,8 +125,7 @@ function iterate{N}(io::NTuple{N,IO},interpreter;
         celldesc = get!(handles,cellid) do
             FASTQ.Writer(gendescryptor(cellid))
         end
-        # celldesc = getdescryptor!(handles,output,cellid,interpreter.cellbarcodes;kwargs...)
-        write(celldesc,records[1])
+        write(celldesc,ir.output)
     end
 
     if closebuffers
