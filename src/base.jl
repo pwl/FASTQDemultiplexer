@@ -1,0 +1,135 @@
+using Bio
+using Bio.Seq
+using Bio.Seq.FASTQ
+using Iterators
+
+
+immutable Interpreter{N}
+    insertpos::NTuple{N,Range{Int}}
+    cellpos::NTuple{N,Range{Int}}
+    umipos::NTuple{N,Range{Int}}
+    cellbarcodes::Vector{DNASequence}
+    umibarcodes::Vector{DNASequence}
+end
+
+"""
+Generate all the combinations of ACGT of length `len`
+"""
+generatebarcodes(len) = collect(map(v->DNASequence(*(v...)),product(repeated(["A","C","G","T"],len)...)))
+
+
+function Interpreter(id)
+    if id == :marsseq
+        subcellbc = DNASequence["CTACCA","CATGCT","GCACAT","TGCTCG","AGCAAT","AGTTGC","CCAGTT","TTGAGC","ACCAAC","GGTCCA","GTATAA","TTCGCT","AACTTG","CACATC","TCGGAA","AAGGAT","GCACAC","TCTGGC","CATAGC","CAGGAG","TGTCGG","ATTATG","CCTACC","TACTTA","GAAGAA","AGGATC","GACAGT","CCTATG","TCGCCT","ATAGCG","GTCGCC","ATTCTA","CGTTAC","GTCTGA","TTACGC","TTGAAT","AAGACA","CAGCAA","TCCAGC","CCAGAG","TCCTTG","AGGTTA","GTCATC","CCTTCG","TCTCGG","ATTGTC","GAACCT","TAATGA","AACGCA","CAACTC","CTGTAA","TAAGCA","AATGTT","CAGCGG","GACCAG","TATCCA","ACAGGT","CCAACA","GCCGTC","TATCTG","ACTAAG","CGCCTT","GCCTAG","TGCTGC","AGGTAA","CTAACT","GTAACA","TGTAAT","ATTATC","CTATGC","GTCCAC","TTGTCT","AACAAT","ATTCCT","GAAGGA","TCGCTA","ACAGTT","CAATAG","GACCGT","TCTGCA","ACTGTA","CCAGCA","GACCTA","TGCAAG","AGCATG","CGCTAT","GATATC","TGTAAC","AGGTCG","CTGCGG","GCAGCC","TTAATC","AGGTGC","CTGTGG","GCCGCA","TTATAT","CGGAAT","TGCAGC","CATTGA","CTGATG","AACTGG","TCCAGT","ATCGTC","TAGAGC","AAGGCT","GTAGCA","GCGATA","TAGTCG","GGTACC","GTATCG","GTACTA","GAACTG","GACTGA","AGCATC","TACGTA","CTAGTG","ATTGGC","CAGGTT","GCTATG","ATCTCG","ATACGC","CGACGT","TTCCGA","GTCTCA","ATCCGT","AGCTGT","CATCGT","CGCAGT","TGAGAC","ACGATG","TAGACT","TCACAG","TAACCG","GATCAC","ACGTAC","GGACTT","TCGTAG","CTGTAC","TTAGCC","GAGCTC","CTTGAC","GTAGTC","TGTACA","CCAAGT","CATCAG","GTCCAA","CAGTCA","TGCTGA","AGCTTA","CGTAGA","TCACGT","AGACTC","TAAGCT","TCGCGA","GCGTCA","AATCGG","TTCAGG","CTATAG","TCAAGC","GAGTCT","CCGTAA","TAGGCA","CGAGAT","TCAATG","CGAATG","ACTGGA","GGTTCA","TCAGTC","AAGCTT","GCTCTA","TAGCTA","TTAACG","TCAGCA","ACTCTG","CGTACG","GTGCAC","AGTACT","AGTCAG","CCTAGG","ACTAGT","AGTCTA","GCGTAT","CTCAGA","AGCGCT","GTCAAG","TAGCGT","ACGGTC","GCATTG","GGCTAA","CTGTGA","CATGCA","GATCGA"]
+        poolbc = DNASequence["AGTC","CATG","TTGG","ACAG","CTAC","ATCA","TGAT","TCTA"]
+        cellbc = collect(map(join,product(poolbc,subcellbc)))
+        umibc = generatebarcodes(6)
+
+        umi_n=6
+        cell_n=10
+        insert_n=53
+
+        #     1  4   8           60
+        # R1: XXXCCCCIIIIII---IIII
+        #     1     7
+        # R2: CCCCCCUUUUUU
+        return Interpreter{2}(
+            (8:60,1:0),
+            (4:7,1:6),
+            (1:0,7:12),
+            cellbc,
+            umibc
+        )
+    end
+end
+
+
+type InterpretedRecord{S<:Bio.Seq.BioSequence}
+    umi::S
+    cell::S
+    output::FASTQ.Record
+end
+
+
+function InterpretedRecord(interpreter::Interpreter)
+    umi = DNASequence(sum(map(length,interpreter.umipos)))
+    cell = DNASequence(sum(map(length,interpreter.cellpos)))
+    output = FASTQ.Record()
+    return InterpretedRecord(umi,cell,output)
+end
+
+"""
+
+Extracts the sequences at positions `positions` from FASTQ.Records
+`records` and saves them into a sequence `seq`
+
+"""
+function extract!(seq,records,positions)
+    start = 1
+    for (record,position) in zip(records,positions)
+        copy!(seq,start,
+              Bio.Seq.FASTQ.sequence(record,position),1)
+        start += length(position)
+    end
+    return seq
+end
+
+
+function interpret!{N}(ir::InterpretedRecord,
+                       recs::NTuple{N,FASTQ.Record},
+                       interpreter::Interpreter{N};
+                       kwargs...)
+    extract!(ir.umi, recs,interpreter.umipos)
+    extract!(ir.cell, recs,interpreter.cellpos)
+    return ir
+end
+
+
+function iterate{N}(io::NTuple{N,IO},interpreter;
+                    output="output",
+                    closebuffers=true,
+                    gendescryptor=openfile(output,interpreter),
+                    kwargs...)
+    readers = map(FASTQ.Reader,io)
+    records = map(x->FASTQ.Record(),io)
+
+    handles = Dict{Int,FASTQ.Writer}()
+    demultiplexcell = Demultiplexer(interpreter.cellbarcodes,n_max_errors=0)
+    demultiplexumi  = Demultiplexer(interpreter.umibarcodes, n_max_errors=0)
+    ir = InterpretedRecord(interpreter)
+
+    while !any(map(eof,readers))
+        for (reader,record) in zip(readers,records)
+            read!(reader,record)
+        end
+
+        interpret!(ir,records,interpreter; kwargs...)
+        cellid, _ = demultiplex(demultiplexcell,ir.cell)
+
+        # TODO have a custom write function
+        # TODO write umis
+        celldesc = get!(handles,cellid) do
+            FASTQ.Writer(gendescryptor(cellid))
+        end
+        # celldesc = getdescryptor!(handles,output,cellid,interpreter.cellbarcodes;kwargs...)
+        write(celldesc,records[1])
+    end
+
+    if closebuffers
+        map(close,values(handles))
+    end
+
+    return nothing
+end
+
+
+function openfile(output,interpreter)
+    function gendescryptor(cellid)
+        if cellid > 0
+            filename = string(interpreter.cellbarcodes[cellid])
+        else
+            filename = "unmatched"
+        end
+        return open(joinpath(output,filename)*".fastq","w")
+    end
+end

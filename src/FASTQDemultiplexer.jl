@@ -1,5 +1,6 @@
+__precompile__()
 module FASTQDemultiplexer
 
-# package code goes here
+include("base.jl")
 
 end # module
