@@ -2,6 +2,7 @@ using Bio
 using Bio.Seq
 using Bio.Seq.FASTQ
 using Iterators
+using BufferedStreams
 
 
 supported_protocols()=["marsseq"]
@@ -9,9 +10,9 @@ supported_protocols()=["marsseq"]
 
 immutable Interpreter{N}
     insertread::Int
-    insertpos::Range{Int}
-    cellpos::NTuple{N,Range{Int}}
-    umipos::NTuple{N,Range{Int}}
+    insertpos::UnitRange{Int}
+    cellpos::NTuple{N,UnitRange{Int}}
+    umipos::NTuple{N,UnitRange{Int}}
     cellbarcodes::Vector{DNASequence}
     umibarcodes::Vector{DNASequence}
 end
@@ -44,18 +45,20 @@ function Interpreter(id)
 end
 
 
-type InterpretedRecord{S<:Bio.Seq.BioSequence}
-    umi::S
-    cell::S
+type InterpretedRecord
+    umi::Vector{UInt8}
+    cell::Vector{UInt8}
+    cellseq::DNASequence
     output::FASTQ.Record
 end
 
 
 function InterpretedRecord(interpreter::Interpreter)
-    umi = DNASequence(sum(map(length,interpreter.umipos)))
-    cell = DNASequence(sum(map(length,interpreter.cellpos)))
+    umi = Array(UInt8,sum(map(length,interpreter.umipos)))
+    cell = Array(UInt8,sum(map(length,interpreter.cellpos)))
+    cellseq = DNASequence(sum(map(length,interpreter.cellpos)))
     output = FASTQ.Record()
-    return InterpretedRecord(umi,cell,output)
+    return InterpretedRecord(umi,cell,cellseq,output)
 end
 
 """
@@ -66,10 +69,12 @@ Extracts the sequences at positions `positions` from FASTQ.Records
 """
 function extract!(seq,records,positions)
     start = 1
-    for (record,position) in zip(records,positions)
+    nrec = length(records)
+    for i in 1:nrec
+        range = records[i].sequence[positions[i]]
         copy!(seq,start,
-              Bio.Seq.FASTQ.sequence(record,position),1)
-        start += length(position)
+              records[i].data,first(range),length(range))
+        start += length(range)
     end
     return seq
 end
@@ -77,11 +82,10 @@ end
 
 function interpret!{N}(ir::InterpretedRecord,
                        recs::NTuple{N,FASTQ.Record},
-                       interpreter::Interpreter{N};
-                       outputquality = true,
-                       writeumis = false,
-                       kwargs...)
+                       interpreter::Interpreter{N},
+                       writeumis)
     extract!(ir.cell, recs, interpreter.cellpos)
+    Bio.Seq.encode_copy!(ir.cellseq,1,ir.cell,1,length(ir.cell))
     if writeumis
         extract!(ir.umi, recs, interpreter.umipos)
     end
@@ -90,18 +94,14 @@ function interpret!{N}(ir::InterpretedRecord,
     insertpos = interpreter.insertpos
 
     # TODO how slow is the copy here?
-    ir.output = copy(recs[insertid])
-    ir.output.sequence = recs[insertid].sequence[insertpos]
-    if outputquality
-        ir.output.quality = recs[insertid].quality[insertpos]
-    else
-        ir.output.quality = 1:0
-    end
-    return ir
+    ir.output = recs[insertid]
+    ir.output.sequence = ir.output.sequence[insertpos]
+    ir.output.quality = ir.output.quality[insertpos]
+    return nothing
 end
 
 
-function FASTQdemultiplex{N}(io::NTuple{N,IO},interpreter;
+function FASTQdemultiplex{N}(io::NTuple{N,IO},interpreter::Interpreter{N};
                              output="output",
                              closebuffers=true,
                              writeumis=false,
@@ -119,12 +119,12 @@ function FASTQdemultiplex{N}(io::NTuple{N,IO},interpreter;
     ir = InterpretedRecord(interpreter)
 
     while !any(map(eof,readers))
-        for (reader,record) in zip(readers,records)
-            read!(reader,record)
+        for i in 1:N
+            read!(readers[i],records[i])
         end
 
-        interpret!(ir,records,interpreter; writeumis = writeumis, kwargs...)
-        cellid, _ = demultiplex(demultiplexcell,ir.cell)
+        interpret!(ir,records,interpreter,writeumis)
+        cellid, _ = demultiplex(demultiplexcell,ir.cellseq)
 
         # TODO: have a custom write function
         celldesc = get!(cellhandles,cellid) do
@@ -136,11 +136,8 @@ function FASTQdemultiplex{N}(io::NTuple{N,IO},interpreter;
             umidesc = get!(umihandles,cellid) do
                 umidescryptor(cellid)
             end
-            write(umidesc,string(ir.umi)*"\n")
-            # for (rec,rng) in  zip(records,interpreter.umipos)
-            #     unsafe_write(umidesc,pointer(rec.data)+first(rec.sequence[rng])-1,length(rng))
-            # end
-            # write(umidesc,"\n")
+            unsafe_write(umidesc,pointer(ir.umi),length(ir.umi))
+            write(umidesc,'\n')
         end
     end
 
@@ -154,12 +151,13 @@ end
 
 
 function openfile(output,interpreter;ext=".fastq")
+    unmatched = open(joinpath(output,"unmatched.fastq"),"w")
     function gendescryptor(cellid)
         if cellid > 0
             filename = string(interpreter.cellbarcodes[cellid])
+            return open(joinpath(output,filename)*ext,"w")
         else
-            filename = "unmatched"
+            return unmatched
         end
-        return open(joinpath(output,filename)*ext,"w")
     end
 end
