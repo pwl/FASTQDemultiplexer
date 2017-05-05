@@ -52,16 +52,20 @@ function Interpreter(yamlfile::String)
 
         end
 
-        barcodes = config["barcodes"]
-        # parse the barcodes
         cellbarcodes = DNASequence[]
-        if haskey(barcodes,"cells")
-            cellbarcodes = DNASequence[bc for bc in barcodes["cells"]]
-        end
-
         umibarcodes = DNASequence[]
-        if haskey(barcodes,"umis")
-            umibarcodes = DNASequence[bc for bc in barcodes["umis"]]
+
+        if haskey(config,"barcodes") && config["barcodes"] != nothing
+            barcodes = config["barcodes"]
+
+            # parse the barcodes
+            if haskey(barcodes,"cells")
+                cellbarcodes = DNASequence[bc for bc in barcodes["cells"]]
+            end
+
+            if haskey(barcodes,"umis")
+                umibarcodes = DNASequence[bc for bc in barcodes["umis"]]
+            end
         end
 
         return Interpreter{nreads}(insertread,insertpos,
@@ -71,7 +75,7 @@ function Interpreter(yamlfile::String)
                                    umibarcodes)
 
     catch err
-        info("Unable to parse the YAML file.")
+        warn("Unable to parse the YAML file.")
         throw(err)
     end
 end
