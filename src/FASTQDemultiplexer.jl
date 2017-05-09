@@ -5,6 +5,7 @@ using Bio
 using Bio.Seq
 using Bio.Seq.FASTQ
 
+include("utils.jl")
 include("protocol.jl")
 include("base.jl")
 include("output.jl")
