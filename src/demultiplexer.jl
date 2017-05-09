@@ -19,13 +19,10 @@ end
 
 function interpret!{N}(ir::InterpretedRecord,
                        recs::NTuple{N,FASTQ.Record},
-                       interpreter::Interpreter{N},
-                       writeumis)
+                       interpreter::Interpreter{N})
     extract!(ir.cell, recs, interpreter.cellpos)
     # Bio.Seq.encode_copy!(ir.cellseq,1,ir.cell,1,length(ir.cell))
-    if writeumis
-        extract!(ir.umi, recs, interpreter.umipos)
-    end
+    extract!(ir.umi, recs, interpreter.umipos)
 
     insertid = interpreter.insertread
     insertpos = interpreter.insertpos
@@ -33,25 +30,18 @@ function interpret!{N}(ir::InterpretedRecord,
     ir.output = recs[insertid]
     ir.output.sequence = ir.output.sequence[insertpos]
     ir.output.quality = ir.output.quality[insertpos]
+    ir.cellid = gen_id(ir.cell)
     return nothing
 end
 
 
 function FASTQdemultiplex{N}(io::NTuple{N,IO},
-                             interpreter::Interpreter{N};
-                             output::String="output",
-                             closebuffers::Bool=true,
-                             writeumis::Bool=false,
+                             interpreter::Interpreter{N},
+                             oh::OutputHandler;
                              cellbarcodes=[],
-                             celldescryptor=openfile(output,interpreter,ext=".fastq"),
-                             umidescryptor=openfile(output,interpreter,ext=".umi"),
                              kwargs...)
     readers = map(FASTQ.Reader,io)
     records = map(x->FASTQ.Record(),io)
-
-    cellhandles = Dict{Vector{UInt8},FASTQ.Writer}()
-    # TODO: IO is an abstract type, can this intruduce type instability?
-    #umihandles = Dict{Int,IO}()
 
     # TODO: move this out as a callback
     demultiplexcell = Demultiplexer(Vector{DNASequence}(cellbarcodes),
@@ -64,9 +54,6 @@ function FASTQdemultiplex{N}(io::NTuple{N,IO},
         end
     end
 
-    function accepted(cellid)
-
-    end
     ir = InterpretedRecord(interpreter)
 
     while !any(map(eof,readers))
@@ -74,27 +61,15 @@ function FASTQdemultiplex{N}(io::NTuple{N,IO},
             read!(readers[i],records[i])
         end
 
-        interpret!(ir,records,interpreter,writeumis)
-
-        # TODO: have a custom write function
-        celldesc = get!(cellhandles,ir.cell) do
-            FASTQ.Writer(celldescryptor(ir.cell,acceptedbarcode(ir)))
+        interpret!(ir,records,interpreter)
+        if length(oh.selectedcells) > 0
+            ir.unmatched = !(ir.cellid in oh.selectedcells)
         end
-        write(celldesc,ir.output)
 
-        # if writeumis
-        #     umidesc = get!(umihandles,cellid) do
-        #         umidescryptor(cellid)
-        #     end
-        #     unsafe_write(umidesc,pointer(ir.umi),length(ir.umi))
-        #     write(umidesc,'\n')
-        # end
+        write(oh,ir)
     end
 
-    if closebuffers
-        map(close,values(cellhandles))
-        # map(close,values(umihandles))
-    end
+    close(oh)
 
     return nothing
 end

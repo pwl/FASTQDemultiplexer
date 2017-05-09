@@ -3,7 +3,8 @@ type InterpretedRecord
     cell::Vector{UInt8}
     cellseq::DNASequence
     output::FASTQ.Record
-    accepted::Bool
+    unmatched::Bool
+    cellid::UInt
 end
 
 
@@ -12,5 +13,5 @@ function InterpretedRecord(interpreter::Interpreter)
     cell = Array(UInt8,sum(map(length,interpreter.cellpos)))
     cellseq = DNASequence(sum(map(length,interpreter.cellpos)))
     output = FASTQ.Record()
-    return InterpretedRecord(umi,cell,cellseq,output,false)
+    return InterpretedRecord(umi,cell,cellseq,output,false,0)
 end
