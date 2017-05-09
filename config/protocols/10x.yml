@@ -1,0 +1,12 @@
+name: 10x
+
+reads:
+
+  - name: R1
+    cell: 1:16
+    umi: 17:26
+
+  - name: R2
+    insert: 1:98
+
+  - name: I1

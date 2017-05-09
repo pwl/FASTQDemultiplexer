@@ -1,3 +1,10 @@
+"""
+
+A type designed to handle the writing of the demultiplexed reads to
+corresponding FASTQ files.
+
+"""
+
 type OutputHandler{F}
     cellhandles::Dict{UInt,FASTQ.Writer}
     umihandles::Dict{UInt,IOStream}
@@ -6,10 +13,15 @@ type OutputHandler{F}
     # writeraw::Bool
     writeunmatched::Bool
     maxopenfiles::Int
+    # todo move from here?
     selectedcells::Vector{UInt}
 end
 
+"""
 
+Generates the OutputHandler given a path to a YAML file.
+
+"""
 function OutputHandler(yamlfile)
     config = YAML.load_file(yamlfile)
 
@@ -36,7 +48,11 @@ function OutputHandler(yamlfile)
                          maxopenfiles, selectedcells)
 end
 
+"""
 
+Writes a read (`InterpretedRecord`) to corresponding output file(s).
+
+"""
 function Base.write(oh::OutputHandler, ir::InterpretedRecord)
 
     if ir.unmatched && ! oh.writeunmatched
@@ -44,7 +60,6 @@ function Base.write(oh::OutputHandler, ir::InterpretedRecord)
     end
 
     if length(oh.cellhandles) + length(oh.umihandles) >= oh.maxopenfiles
-        error("Too many open files")
         close(oh)
         oh.cellhandles=Dict()
         oh.umihandles=Dict()

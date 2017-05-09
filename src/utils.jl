@@ -1,7 +1,7 @@
 """
 
-generates a unique ID for a proper DNA sequence (consisting of A,C,T,G
-bases).  If there are ather letters in the sequence, it returns
+Generates a unique ID for a proper DNA sequence (consisting of A,C,T,G
+bases).  If there are other letters in the sequence it returns
 UInt(0).
 
 """
@@ -32,7 +32,9 @@ end
 
 
 """
-Same as above but works for Vector{UInt8}.
+
+Same as above but works on Vector{UInt8}.
+
 """
 function gen_id(seq::Vector{UInt8})
     if length(seq) >= 32

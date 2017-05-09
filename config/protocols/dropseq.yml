@@ -1,0 +1,10 @@
+name: DropSeq/SeqWell
+
+reads:
+
+  - name: R1
+    cell: 1:12
+    umi: 13:24
+
+  - name: R2
+    insert: 1:39
