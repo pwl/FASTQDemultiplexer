@@ -12,8 +12,9 @@ type OutputHandler{N,F}
     namegen::F
     writeumi::Bool
     writeraw::Bool
-    writetrimmed::Bool
+    writeinsert::Bool
     writeunmatched::Bool
+    writequality::Bool
     maxopenfiles::Int
     # todo move from here?
     selectedcells::Vector{UInt}
@@ -27,10 +28,20 @@ Generates the OutputHandler given a path to a YAML file.
 function OutputHandler{N}(protocol::Interpreter{N}, yamlfile; subdirectory = "")
     config = YAML.load_file(yamlfile)
 
-    writeumi = haskey(config,"writeumi") ? config["writeumi"] : false
-    writeraw = haskey(config,"writeraw") ? config["writeraw"] : false
-    writetrimmed = haskey(config,"writetrimmed") ? config["writetrimmed"] : false
-    writeunmatched = haskey(config,"writeunmatched") ? config["writeunmatched"] : false
+
+    writeumi = false
+    writeraw = false
+    writeinsert = false
+    writeunmatched = false
+    writequality = false
+    if haskey(config, "write")
+        cfgwrite = config["write"]
+        writeumi = haskey(cfgwrite,"umi") ? cfgwrite["umi"] : writeumi
+        writeraw = haskey(cfgwrite,"raw") ? cfgwrite["raw"] : writeraw
+        writeinsert = haskey(cfgwrite,"insert") ? cfgwrite["insert"] : writeinsert
+        writeunmatched = haskey(cfgwrite,"unmatched") ? cfgwrite["unmatched"] : writeunmatched
+        writequality = haskey(cfgwrite,"quality") ? cfgwrite["quality"] : writequality
+    end
 
     maxopenfiles = haskey(config,"maxopenfiles") ? config["maxopenfiles"] : 100
     cellbarcodes= haskey(config,"cellbarcodes") ? config["cellbarcodes"] : String[]
@@ -42,9 +53,9 @@ function OutputHandler{N}(protocol::Interpreter{N}, yamlfile; subdirectory = "")
         mkdir(output)
     end
 
-    outputtrimmed = joinpath(output,"trimmed")
-    if !isdirpath(outputtrimmed)
-        mkdir(outputtrimmed)
+    outputinsert = joinpath(output,"insert")
+    if !isdirpath(outputinsert)
+        mkdir(outputinsert)
     end
 
     function namegen(cellid, unmatched)
@@ -53,7 +64,7 @@ function OutputHandler{N}(protocol::Interpreter{N}, yamlfile; subdirectory = "")
         else
             basename = String(cellid)
         end
-        return joinpath(outputtrimmed,basename)
+        return joinpath(outputinsert,basename)
     end
 
 
@@ -64,7 +75,11 @@ function OutputHandler{N}(protocol::Interpreter{N}, yamlfile; subdirectory = "")
         end
         rawhandles = map(protocol.readnames) do name
             filename = joinpath(outputraw,name*".fastq")
-            FASTQ.Writer(open(filename, "w+"))
+            FASTQ.Writer(open(filename, "w+"), quality_header = writequality)
+        end
+    else
+        rawhandles = map(protocol.readnames) do name
+            FASTQ.Writer(DevNull)
         end
     end
 
@@ -72,7 +87,7 @@ function OutputHandler{N}(protocol::Interpreter{N}, yamlfile; subdirectory = "")
                          Dict{UInt,IOStream}(),
                          (rawhandles...),
                          namegen,
-                         writeumi, writeraw, writetrimmed, writeunmatched,
+                         writeumi, writeraw, writeinsert, writeunmatched, writequality,
                          maxopenfiles, selectedcells)
 end
 
@@ -92,8 +107,8 @@ function Base.write(oh::OutputHandler, ir::InterpretedRecord)
             write_raw(oh,ir)
         end
 
-        if oh.writetrimmed
-            write_trimmed(oh,ir)
+        if oh.writeinsert
+            write_insert(oh,ir)
         end
 
         if oh.writeumi
@@ -132,13 +147,18 @@ function write_raw{N}(oh::OutputHandler{N},ir::InterpretedRecord{N})
 end
 
 
-function write_trimmed(oh::OutputHandler,ir::InterpretedRecord)
+"""
+
+Writes the insert to the respective sink.
+
+"""
+function write_insert(oh::OutputHandler,ir::InterpretedRecord)
 
     writeid = ir.unmatched ? UInt(0) : ir.cellid
 
     celldesc = get!(oh.cellhandles, writeid) do
         filename = oh.namegen(ir.cell, ir.unmatched)*".fastq"
-        FASTQ.Writer(open(filename, "w+"))
+        FASTQ.Writer(open(filename, "w+"), quality_header = oh.writequality)
     end
     write(celldesc,ir.output)
 
@@ -146,6 +166,11 @@ function write_trimmed(oh::OutputHandler,ir::InterpretedRecord)
 end
 
 
+"""
+
+Writes a UMI to the UMI sink.
+
+"""
 function write_umi(oh::OutputHandler,ir::InterpretedRecord)
 
     writeid = ir.unmatched ? UInt(0) : ir.cellid
