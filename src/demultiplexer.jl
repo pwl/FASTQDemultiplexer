@@ -17,17 +17,17 @@ function extract!(seq,records,positions)
 end
 
 
-function interpret!{N}(ir::InterpretedRecord,
-                       recs::NTuple{N,FASTQ.Record},
+function interpret!{N}(ir::InterpretedRecord{N},
                        interpreter::Interpreter{N})
-    extract!(ir.cell, recs, interpreter.cellpos)
+    extract!(ir.cell, ir.records, interpreter.cellpos)
     # Bio.Seq.encode_copy!(ir.cellseq,1,ir.cell,1,length(ir.cell))
-    extract!(ir.umi, recs, interpreter.umipos)
+    extract!(ir.umi, ir.records, interpreter.umipos)
 
     insertid = interpreter.insertread
     insertpos = interpreter.insertpos
 
-    ir.output = recs[insertid]
+    # TODO: can we do without the copy here?
+    ir.output = copy(ir.records[insertid])
     ir.output.sequence = ir.output.sequence[insertpos]
     ir.output.quality = ir.output.quality[insertpos]
     ir.cellid = gen_id(ir.cell)
@@ -41,7 +41,6 @@ function FASTQdemultiplex{N}(io::NTuple{N,IO},
                              cellbarcodes=[],
                              kwargs...)
     readers = map(FASTQ.Reader,io)
-    records = map(x->FASTQ.Record(),io)
 
     # TODO: move this out as a callback
     demultiplexcell = Demultiplexer(Vector{DNASequence}(cellbarcodes),
@@ -58,10 +57,10 @@ function FASTQdemultiplex{N}(io::NTuple{N,IO},
 
     while !any(map(eof,readers))
         for i in 1:N
-            read!(readers[i],records[i])
+            read!(readers[i],ir.records[i])
         end
 
-        interpret!(ir,records,interpreter)
+        interpret!(ir,interpreter)
         if length(oh.selectedcells) > 0
             ir.unmatched = !(ir.cellid in oh.selectedcells)
         end
