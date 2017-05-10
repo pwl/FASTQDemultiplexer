@@ -69,8 +69,6 @@ function FASTQdemultiplex{N}(io::NTuple{N,IO},
         write(oh,ir)
     end
 
-    close(oh)
-
     return nothing
 end
 

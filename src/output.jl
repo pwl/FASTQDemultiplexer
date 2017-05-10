@@ -22,15 +22,20 @@ end
 Generates the OutputHandler given a path to a YAML file.
 
 """
-function OutputHandler(yamlfile)
+function OutputHandler(yamlfile; subdirectory = "")
     config = YAML.load_file(yamlfile)
 
     writeumi = haskey(config,"writeumi") ? config["writeumi"] : false
     writeunmatched = haskey(config,"writeunmatched") ? config["writeunmatched"] : false
-    output = haskey(config,"output") ? config["output"] : "."
     maxopenfiles = haskey(config,"maxopenfiles") ? config["maxopenfiles"] : 100
     cellbarcodes= haskey(config,"cellbarcodes") ? config["cellbarcodes"] : String[]
     selectedcells = map(gen_id, map(DNASequence,cellbarcodes))
+
+    output = haskey(config,"output") ? config["output"] : "."
+    output = joinpath(output,subdirectory)
+    if !isdirpath(output)
+        mkdir(output)
+    end
 
     function namegen(cellid, unmatched)
         if unmatched
