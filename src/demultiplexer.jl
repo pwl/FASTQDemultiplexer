@@ -59,6 +59,13 @@ function interpret!{N}(ir::InterpretedRecord{N},
 end
 
 
+function Base.read!{N}(readers::NTuple{N,FASTQ.Reader},ir::InterpretedRecord{N})
+    for i in 1:N
+        read!(readers[i],ir.records[i])
+    end
+end
+
+
 function FASTQdemultiplex{N}(readers::NTuple{N,FASTQ.Reader},
                              interpreter::Interpreter{N},
                              oh::OutputHandler;
@@ -67,11 +74,11 @@ function FASTQdemultiplex{N}(readers::NTuple{N,FASTQ.Reader},
     ir = InterpretedRecord(interpreter)
 
     while !any(map(eof,readers))
-        for i in 1:N
-            read!(readers[i],ir.records[i])
-        end
+        read!(readers,ir)
 
+        # TODO: move the interpreter into InputHandles
         interpret!(ir,interpreter)
+
         if length(oh.selectedcells) > 0
             ir.unmatched = !(ir.cellid in oh.selectedcells)
         end
