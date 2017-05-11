@@ -8,12 +8,38 @@ function extract!(seq,records,positions)
     start = 1
     nrec = length(records)
     for i in 1:nrec
-        range = records[i].sequence[positions[i]]
-        copy!(seq,start,
-              records[i].data,first(range),length(range))
-        start += length(range)
+        if issubset(positions[i],1:length(records[i].sequence))
+            range = records[i].sequence[positions[i]]
+            copy!(seq,start,
+                  records[i].data,first(range),length(range))
+            start += length(range)
+        else
+            error("The sequence length of read $i is too short for the given protocol.")
+        end
     end
     return seq
+end
+
+
+function recordview!(recout::FASTQ.Record,recin::FASTQ.Record,position::UnitRange)
+
+    recout.data = recin.data
+    recout.filled = recin.filled
+    recout.identifier = recin.identifier
+    recout.description = recin.description
+    recout.sequence = recin.sequence[position]
+    recout.quality = recin.quality[position]
+    return recout
+end
+
+
+function recordview(record::FASTQ.Record,position::UnitRange)
+    FASTQ.Record(record.data,
+                 record.filled,
+                 record.identifier,
+                 record.description,
+                 record.sequence[position],
+                 record.quality[position])
 end
 
 
@@ -26,10 +52,8 @@ function interpret!{N}(ir::InterpretedRecord{N},
     insertid = interpreter.insertread
     insertpos = interpreter.insertpos
 
-    # TODO: can we do without the copy here?
-    ir.output = copy(ir.records[insertid])
-    ir.output.sequence = ir.output.sequence[insertpos]
-    ir.output.quality = ir.output.quality[insertpos]
+    recordview!(ir.output, ir.records[insertid], insertpos)
+
     ir.cellid = gen_id(ir.cell)
     return nothing
 end

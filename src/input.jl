@@ -59,7 +59,9 @@ function tryopen(f)
     if ext == ".fastq"
         open(f,"r")
     elseif ext == ".gz"
-        ZlibInflateInputStream(open(f,"r"))
+        # TODO: some files are too long to use with Libz
+        # ZlibInflateInputStream(open(f,"r"))
+        open(pipeline(f,`zcat`))[1]
     else
         error("Unrecognized extension: $ext of the file $f")
     end

@@ -3,8 +3,8 @@ name: DropSeq/SeqWell
 reads:
 
   - name: R1
-    cell: 1:12
-    umi: 13:24
+    cell: 1:10
+    umi: 10:20
 
   - name: R2
     insert: 1:39
