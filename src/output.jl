@@ -44,8 +44,19 @@ function OutputHandler{N}(protocol::Interpreter{N}, yamlfile; subdirectory = "")
     end
 
     maxopenfiles = haskey(config,"maxopenfiles") ? config["maxopenfiles"] : 100
-    cellbarcodes= haskey(config,"cellbarcodes") ? config["cellbarcodes"] : String[]
-    selectedcells = map(gen_id, map(DNASequence,cellbarcodes))
+
+    selectedcells=UInt[]
+    if haskey(config,"cellbarcodes")
+        bc = config["cellbarcodes"]
+        if isfile(bc)
+            cellbarcodes = readdlm(bc,String)[:,1]
+            selectedcells = map(cellbarcodes) do b
+                gen_id(Vector{UInt8}(b))
+            end
+        else
+            error("Could not find the file $bc")
+        end
+    end
 
     output = haskey(config,"output") ? config["output"] : "."
     output = joinpath(output,subdirectory)
