@@ -6,13 +6,58 @@ using Libz
 type InputHandle{N}
     handles::NTuple{N,FASTQ.Reader}
     name::String
+    maxreads::Float64
+    curreads::Int
 end
+
+
+function InputHandle{N}(reads::NTuple{N,String}; maxreads=Inf)
+    name = basename(reads[1])
+    # this removes the whole extension .fastq.gz instead of just .gz
+    name = split(name,".")[1]
+    handles = map(tryopen,reads)
+    InputHandle{N}((handles...), name, maxreads, 0)
+end
+
+
+function Base.read!{N}(ih::InputHandle{N},records::NTuple{N,FASTQ.Record})
+    for i in 1:N
+        read!(ih.handles[i],records[i])
+    end
+    ih.curreads+=1
+end
+
+
+function Base.eof{N}(ih::InputHandle{N})
+    return ih.curreads >= ih.maxreads || any(map(eof,ih.handles))
+end
+
+
+function Base.close(ih::InputHandle)
+    map(close,ih.handles)
+end
+
+
+function tryopen(f)
+    name, ext = splitext(f)
+    if ext == ".fastq"
+        FASTQ.Reader(open(f,"r"))
+    elseif ext == ".gz"
+        # TODO: some files are too long to use with Libz
+        FASTQ.Reader(ZlibInflateInputStream(open(f,"r")))
+        # FASTQ.Reader(open(pipeline(f,`zcat`))[1])
+    else
+        error("Unrecognized extension: $ext of the file $f")
+    end
+end
+
 
 type InputHandler{N}
     inputdir::String
     # TODO: there is an abstract type below, fix?
     handles::Vector{InputHandle{N}}
 end
+
 
 """
 
@@ -21,7 +66,7 @@ implementation, it should be improved to count the files for each read
 and spit an error if the counts don't match.
 
 """
-function InputHandler{N}(inputdir, protocol::Interpreter{N})
+function InputHandler{N}(inputdir, protocol::Interpreter{N};maxreads=Inf)
     # TODO: improve the pattern matching, this approach is probably not good enough
     patterns = map(Regex,protocol.readnames)
     filenames = map(f->joinpath(inputdir,f),readdir(inputdir))
@@ -43,35 +88,13 @@ function InputHandler{N}(inputdir, protocol::Interpreter{N})
     end
 
     handles = map(zip(readnames...)) do reads
-        name = basename(reads[1])
-        # this removes the whole extension .fastq.gz instead of just .gz
-        name = split(name,".")[1]
-        InputHandle{N}(map(tryopen,reads),
-                       name)
+        InputHandle(reads, maxreads=maxreads)
     end
 
     return InputHandler{N}(inputdir,handles)
 end
 
 
-function tryopen(f)
-    name, ext = splitext(f)
-    if ext == ".fastq"
-        FASTQ.Reader(open(f,"r"))
-    elseif ext == ".gz"
-        # TODO: some files are too long to use with Libz
-        # ZlibInflateInputStream(open(f,"r"))
-        FASTQ.Reader(open(pipeline(f,`zcat`))[1])
-    else
-        error("Unrecognized extension: $ext of the file $f")
-    end
-end
-
-
-reads(ih::InputHandler) = ih.handles
-
 function Base.close(ih::InputHandler)
-    for hs in ih.handles
-        map(close,hs)
-    end
+    map(close,ih.handles)
 end
