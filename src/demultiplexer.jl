@@ -46,8 +46,8 @@ end
 function interpret!{N}(ir::InterpretedRecord{N},
                        interpreter::Interpreter{N})
     extract!(ir.cell, ir.records, interpreter.cellpos)
-    # Bio.Seq.encode_copy!(ir.cellseq,1,ir.cell,1,length(ir.cell))
     extract!(ir.umi, ir.records, interpreter.umipos)
+    # Bio.Seq.encode_copy!(ir.cellseq,1,ir.cell,1,length(ir.cell))
 
     insertid = interpreter.insertread
     insertpos = interpreter.insertpos
@@ -55,6 +55,7 @@ function interpret!{N}(ir::InterpretedRecord{N},
     recordview!(ir.output, ir.records[insertid], insertpos)
 
     ir.cellid = gen_id(ir.cell)
+    ir.umiid = gen_id(ir.umi)
     return nothing
 end
 
@@ -82,14 +83,38 @@ function FASTQdemultiplex{N}(ih::InputHandle{N},
 end
 
 
-function openfile(output,interpreter;ext=".fastq")
-    unmatched = open(joinpath(output,"unmatched.fastq"),"w")
-    function gendescryptor(cellid,accepted)
-        if accepted
-            filename = String(cellid)
-            return open(joinpath(output,filename)*ext,"w")
-        else
-            return unmatched
-        end
+function demultiplex(yamlfile::String)
+
+    config = YAML.load_file(yamlfile)
+
+    interpreter = Interpreter(Symbol(get(config, "protocol", "none")))
+    inputdir = get(config,"inputdir", ".")::String
+    outputdir = get(config, "outputdir", joinpath(inputdir,"demultiplexed"))::String
+    maxreads = get(config, "maxreads", Inf)
+    towrite = map(Symbol,get(config, "output", ["insert","umi"])::Vector{String})
+    barcodes = get(config, "cellbarcodes", "")::String
+    jobs = get(config, "jobs", Sys.CPU_CORES)::Int
+
+    input = FASTQDemultiplexer.InputHandler(inputdir,interpreter,maxreads=maxreads)
+    reads = collect(take(input.handles,1))
+    # reads = input.handles
+
+    rm(outputdir,force=true,recursive=true)
+    mkdir(outputdir)
+
+    if jobs > 0
+        addprocs(min(jobs,length(reads)))
+        @everywhere import FASTQDemultiplexer
     end
+
+    @time @sync @parallel for hs in reads
+        println("Starting $(basename(hs.name))")
+        output = OutputHandler(interpreter,
+                               outputdir = joinpath(outputdir,hs.name),
+                               towrite = towrite,
+                               cellbarcodes = barcodes)
+        FASTQdemultiplex(hs,interpreter,output)
+        close(output)
+    end
+    return nothing
 end

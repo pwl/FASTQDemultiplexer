@@ -28,7 +28,7 @@ function OutputHandler{N}(protocol::Interpreter{N};
                           maxopenfiles::Int = 1000,
                           towrite::Vector{Symbol} = [])
 
-    supported = [:umi,:raw,:insert,:quality]
+    supported = [:umi,:raw,:insert,:quality,:unmatched]
     unsupported = setdiff(towrite,supported)
     if ! isempty(unsupported)
         error("Unsupported symbols: $unsupported, use one of $supported")

@@ -6,6 +6,7 @@ type InterpretedRecord{N}
     records::NTuple{N,FASTQ.Record}
     unmatched::Bool
     cellid::UInt
+    umiid::UInt
 end
 
 
@@ -15,5 +16,5 @@ function InterpretedRecord{N}(interpreter::Interpreter{N})
     cellseq = DNASequence(sum(map(length,interpreter.cellpos)))
     output = FASTQ.Record()
     records = map(x->FASTQ.Record(),1:N)
-    return InterpretedRecord{N}(umi,cell,cellseq,output,(records...),false,0)
+    return InterpretedRecord{N}(umi,cell,cellseq,output,(records...),false,0,0)
 end
