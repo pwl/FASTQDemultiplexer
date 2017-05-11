@@ -72,7 +72,9 @@ function FASTQdemultiplex{N}(ih::InputHandle{N},
         # TODO: move the interpreter into InputHandles
         interpret!(ir, interpreter)
 
-        if length(oh.selectedcells) > 0
+        if ir.umiid == 0 || ir.cellid == 0
+            ir.unmatched = true
+        elseif length(oh.selectedcells) > 0
             ir.unmatched = !(ir.cellid in oh.selectedcells)
         end
 

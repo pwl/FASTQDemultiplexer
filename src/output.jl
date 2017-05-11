@@ -13,7 +13,7 @@ type OutputHandler{N,F}
     towrite::Vector{Symbol}
     maxopenfiles::Int
     # todo move from here?
-    selectedcells::Vector{UInt}
+    selectedcells::Set{UInt}
 end
 
 
@@ -34,13 +34,14 @@ function OutputHandler{N}(protocol::Interpreter{N};
         error("Unsupported symbols: $unsupported, use one of $supported")
     end
 
-    selectedcells=UInt[]
+    selectedcells=Set{UInt}[]
     if cellbarcodes != ""
         if isfile(cellbarcodes)
             selectedcells = map(readdlm(cellbarcodes,String)[:,1]) do b
                 @assert length(b) == sum(map(length,protocol.cellpos))
                 gen_id(Vector{UInt8}(b))
             end
+            selectedcells = Set{UInt}(selectedcells)
         else
             error("Could not find the file $bc")
         end
