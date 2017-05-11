@@ -61,8 +61,7 @@ end
 
 function FASTQdemultiplex{N}(ih::InputHandle{N},
                              interpreter::Interpreter{N},
-                             oh::OutputHandler;
-                             kwargs...)
+                             oh::OutputHandler)
 
     ir = InterpretedRecord(interpreter)
 
@@ -74,9 +73,6 @@ function FASTQdemultiplex{N}(ih::InputHandle{N},
 
         if length(oh.selectedcells) > 0
             ir.unmatched = !(ir.cellid in oh.selectedcells)
-            if ! ir.unmatched
-                error("Found!")
-            end
         end
 
         write(oh,ir)

@@ -10,47 +10,35 @@ type OutputHandler{N,F}
     umihandles::Dict{UInt,IOStream}
     rawhandles::NTuple{N,FASTQ.Writer}
     namegen::F
-    writeumi::Bool
-    writeraw::Bool
-    writeinsert::Bool
-    writeunmatched::Bool
-    writequality::Bool
+    towrite::Vector{Symbol}
     maxopenfiles::Int
     # todo move from here?
     selectedcells::Vector{UInt}
 end
+
 
 """
 
 Generates the OutputHandler given a path to a YAML file.
 
 """
-function OutputHandler{N}(protocol::Interpreter{N}, yamlfile; subdirectory = "")
-    config = YAML.load_file(yamlfile)
+function OutputHandler{N}(protocol::Interpreter{N};
+                          cellbarcodes::String = "",
+                          outputdir::String = ".",
+                          maxopenfiles::Int = 1000,
+                          towrite::Vector{Symbol} = [])
 
-
-    writeumi = false
-    writeraw = false
-    writeinsert = false
-    writeunmatched = false
-    writequality = false
-    if haskey(config, "write")
-        cfgwrite = config["write"]
-        writeumi = haskey(cfgwrite,"umi") ? cfgwrite["umi"] : writeumi
-        writeraw = haskey(cfgwrite,"raw") ? cfgwrite["raw"] : writeraw
-        writeinsert = haskey(cfgwrite,"insert") ? cfgwrite["insert"] : writeinsert
-        writeunmatched = haskey(cfgwrite,"unmatched") ? cfgwrite["unmatched"] : writeunmatched
-        writequality = haskey(cfgwrite,"quality") ? cfgwrite["quality"] : writequality
+    supported = [:umi,:raw,:insert,:quality]
+    unsupported = setdiff(towrite,supported)
+    if ! isempty(unsupported)
+        error("Unsupported symbols: $unsupported, use one of $supported")
     end
 
-    maxopenfiles = haskey(config,"maxopenfiles") ? config["maxopenfiles"] : 100
-
     selectedcells=UInt[]
-    if haskey(config,"cellbarcodes")
-        bc = config["cellbarcodes"]
-        if isfile(bc)
-            cellbarcodes = readdlm(bc,String)[:,1]
-            selectedcells = map(cellbarcodes) do b
+    if cellbarcodes != ""
+        if isfile(cellbarcodes)
+            selectedcells = map(readdlm(cellbarcodes,String)[:,1]) do b
+                @assert length(b) == sum(map(length,protocol.cellpos))
                 gen_id(Vector{UInt8}(b))
             end
         else
@@ -58,16 +46,17 @@ function OutputHandler{N}(protocol::Interpreter{N}, yamlfile; subdirectory = "")
         end
     end
 
-    output = haskey(config,"output") ? config["output"] : "."
-    output = joinpath(output,subdirectory)
-    if !isdirpath(output)
-        mkdir(output)
+
+    if !isdirpath(outputdir)
+        mkdir(outputdir)
     end
 
-    outputinsert = joinpath(output,"insert")
+
+    outputinsert = joinpath(outputdir,"insert")
     if !isdirpath(outputinsert)
         mkdir(outputinsert)
     end
+
 
     function namegen(cellid, unmatched)
         if unmatched
@@ -79,14 +68,14 @@ function OutputHandler{N}(protocol::Interpreter{N}, yamlfile; subdirectory = "")
     end
 
 
-    if writeraw
-        outputraw = joinpath(output,"raw")
+    if :raw in towrite
+        outputraw = joinpath(outputdir,"raw")
         if !isdirpath(outputraw)
             mkdir(outputraw)
         end
         rawhandles = map(protocol.readnames) do name
             filename = joinpath(outputraw,name*".fastq")
-            FASTQ.Writer(open(filename, "w+"), quality_header = writequality)
+            FASTQ.Writer(open(filename, "w+"), quality_header = :quality in towrite)
         end
     else
         rawhandles = map(protocol.readnames) do name
@@ -94,11 +83,12 @@ function OutputHandler{N}(protocol::Interpreter{N}, yamlfile; subdirectory = "")
         end
     end
 
+
     return OutputHandler(Dict{UInt,FASTQ.Writer}(),
                          Dict{UInt,IOStream}(),
                          (rawhandles...),
                          namegen,
-                         writeumi, writeraw, writeinsert, writeunmatched, writequality,
+                         towrite,
                          maxopenfiles, selectedcells)
 end
 
@@ -109,20 +99,20 @@ Writes a read (`InterpretedRecord`) to corresponding output file(s).
 """
 function Base.write(oh::OutputHandler, ir::InterpretedRecord)
 
-    if ir.unmatched && ! oh.writeunmatched
+    if ir.unmatched && ! (:unmatched in oh.towrite)
         return nothing
     else
         closetoomanyfiles!(oh)
 
-        if oh.writeraw
+        if :raw in oh.towrite
             write_raw(oh,ir)
         end
 
-        if oh.writeinsert
+        if :insert in oh.towrite
             write_insert(oh,ir)
         end
 
-        if oh.writeumi
+        if :umi in oh.towrite
             write_umi(oh,ir)
         end
     end
@@ -169,7 +159,7 @@ function write_insert(oh::OutputHandler,ir::InterpretedRecord)
 
     celldesc = get!(oh.cellhandles, writeid) do
         filename = oh.namegen(ir.cell, ir.unmatched)*".fastq"
-        FASTQ.Writer(open(filename, "w+"), quality_header = oh.writequality)
+        FASTQ.Writer(open(filename, "w+"), quality_header = :quality in oh.towrite)
     end
     write(celldesc,ir.output)
 
