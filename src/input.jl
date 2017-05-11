@@ -4,7 +4,7 @@ using Libz
 # concrete handles for each file extension?)
 
 type InputHandle{N}
-    handles::NTuple{N,IO}
+    handles::NTuple{N,FASTQ.Reader}
     name::String
 end
 
@@ -57,11 +57,11 @@ end
 function tryopen(f)
     name, ext = splitext(f)
     if ext == ".fastq"
-        open(f,"r")
+        FASTQ.Reader(open(f,"r"))
     elseif ext == ".gz"
         # TODO: some files are too long to use with Libz
         # ZlibInflateInputStream(open(f,"r"))
-        open(pipeline(f,`zcat`))[1]
+        FASTQ.Reader(open(pipeline(f,`zcat`))[1])
     else
         error("Unrecognized extension: $ext of the file $f")
     end

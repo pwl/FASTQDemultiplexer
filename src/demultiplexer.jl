@@ -59,23 +59,10 @@ function interpret!{N}(ir::InterpretedRecord{N},
 end
 
 
-function FASTQdemultiplex{N}(io::NTuple{N,IO},
+function FASTQdemultiplex{N}(readers::NTuple{N,FASTQ.Reader},
                              interpreter::Interpreter{N},
                              oh::OutputHandler;
-                             cellbarcodes=[],
                              kwargs...)
-    readers = map(FASTQ.Reader,io)
-
-    # TODO: move this out as a callback
-    demultiplexcell = Demultiplexer(Vector{DNASequence}(cellbarcodes),
-                                    n_max_errors=0)
-    function acceptedbarcode(ir)
-        if isempty(cellbarcodes)
-            return true
-        else
-            return demultiplex(demultiplexcell,DNASequence(ir.cell))[1] > 0
-        end
-    end
 
     ir = InterpretedRecord(interpreter)
 
