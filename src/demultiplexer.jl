@@ -97,22 +97,26 @@ function demultiplex(yamlfile::String)
     barcodes = get(config, "cellbarcodes", "")::String
     jobs = get(config, "jobs", Sys.CPU_CORES)::Int
 
-    input = FASTQDemultiplexer.InputHandler(inputdir,interpreter,maxreads=maxreads)
+    fastqfiles = listfastq(inputdir,interpreter)
 
-    jobs = min(jobs,length(input.handles))-1
+    jobs = min(jobs,length(fastqfiles))-1
     if jobs > 0
         addprocs(jobs)
         @everywhere import FASTQDemultiplexer
     end
 
-    @time @sync @parallel for hs in input.handles
+    @time @sync @parallel for reads in fastqfiles
+        hs = InputHandle(reads,maxreads=maxreads)
         println("Starting $(basename(hs.name))")
-        output = OutputHandler(interpreter,
-                               outputdir = joinpath(outputdir,hs.name),
-                               towrite = towrite,
-                               cellbarcodes = barcodes)
-        FASTQdemultiplex(hs,interpreter,output)
+        output = OutputHandler(
+            interpreter,
+            outputdir = joinpath(outputdir,hs.name),
+            towrite = towrite,
+            cellbarcodes = barcodes)
+        @time FASTQdemultiplex(hs,interpreter,output)
+        close(hs)
         close(output)
     end
     return nothing
+
 end

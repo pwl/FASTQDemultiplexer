@@ -69,21 +69,14 @@ function zcatfifo(f)
 end
 
 
-type InputHandler{N}
-    inputdir::String
-    # TODO: there is an abstract type below, fix?
-    handles::Vector{InputHandle{N}}
-end
+"""
 
+Lists FASTQ files and collects them into tuples of different types of
+reads.  The reads can then be opened with InputHandle
 
 """
 
-Opens a bunch of FASTQ files, this is just a very simple
-implementation, it should be improved to count the files for each read
-and spit an error if the counts don't match.
-
-"""
-function InputHandler{N}(inputdir, protocol::Interpreter{N};maxreads=Inf)
+function listfastq{N}(inputdir, protocol::Interpreter{N})
     # TODO: improve the pattern matching, this approach is probably not good enough
     patterns = map(Regex,protocol.readnames)
     filenames = map(f->joinpath(inputdir,f),readdir(inputdir))
@@ -104,14 +97,5 @@ function InputHandler{N}(inputdir, protocol::Interpreter{N};maxreads=Inf)
         error("Uneven number of files: $lengths")
     end
 
-    handles = map(zip(readnames...)) do reads
-        InputHandle(reads, maxreads=maxreads)
-    end
-
-    return InputHandler{N}(inputdir,handles)
-end
-
-
-function Base.close(ih::InputHandler)
-    map(close,ih.handles)
+    return collect(zip(readnames...))
 end
