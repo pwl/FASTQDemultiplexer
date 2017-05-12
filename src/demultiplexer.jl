@@ -98,18 +98,14 @@ function demultiplex(yamlfile::String)
     jobs = get(config, "jobs", Sys.CPU_CORES)::Int
 
     input = FASTQDemultiplexer.InputHandler(inputdir,interpreter,maxreads=maxreads)
-    reads = collect(take(input.handles,1))
-    # reads = input.handles
 
-    rm(outputdir,force=true,recursive=true)
-    mkdir(outputdir)
-
+    jobs = min(jobs,length(input.handles))-1
     if jobs > 0
-        addprocs(min(jobs,length(reads)))
+        addprocs(jobs)
         @everywhere import FASTQDemultiplexer
     end
 
-    @time @sync @parallel for hs in reads
+    @time @sync @parallel for hs in input.handles
         println("Starting $(basename(hs.name))")
         output = OutputHandler(interpreter,
                                outputdir = joinpath(outputdir,hs.name),
