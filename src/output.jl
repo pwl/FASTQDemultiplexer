@@ -48,35 +48,25 @@ function OutputHandler{N}(protocol::Interpreter{N};
     end
 
 
-    if !isdirpath(outputdir)
-        mkdir(outputdir)
-    end
+    mkpath(outputdir)
 
 
     outputinsert = joinpath(outputdir,"insert")
-    if !isdirpath(outputinsert)
-        mkdir(outputinsert)
-    end
+    mkpath(outputinsert)
 
 
-    function namegen(cellid, unmatched)
-        if unmatched
-            basename = "unmatched"
-        else
-            basename = String(cellid)
-        end
-        return joinpath(outputinsert,basename)
-    end
+    namegen(cellid, unmatched) =
+        joinpath(outputinsert,
+                 unmatched ? "unmatched" : String(cellid))
 
 
     if :raw in towrite
         outputraw = joinpath(outputdir,"raw")
-        if !isdirpath(outputraw)
-            mkdir(outputraw)
-        end
+        mkpath(outputraw)
         rawhandles = map(protocol.readnames) do name
             filename = joinpath(outputraw,name*".fastq")
-            FASTQ.Writer(open(filename, "w+"), quality_header = :quality in towrite)
+            FASTQ.Writer(open(filename, "w+"),
+                         quality_header = :quality in towrite)
         end
     else
         rawhandles = map(protocol.readnames) do name
