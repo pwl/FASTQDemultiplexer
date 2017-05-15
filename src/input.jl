@@ -44,9 +44,9 @@ function tryopen(f)
         FASTQ.Reader(open(f,"r"))
     elseif ext == ".gz"
         # TODO: some files are too long to use with Libz
-        # FASTQ.Reader(ZlibInflateInputStream(open(f,"r")))
+        FASTQ.Reader(ZlibInflateInputStream(open(f,"r")))
         # FASTQ.Reader(open(pipeline(f,`zcat`))[1])
-        zcatfifo(f)
+        # zcatfifo(f)
     else
         error("Unrecognized extension: $ext of the file $f")
     end
@@ -60,7 +60,6 @@ the Libz or pipeline solutions.
 
 """
 function zcatfifo(f)
-    # fifo=readstring(`mktemp -u $(basename(f))-XXXXXXXX.fifo`)
     fifo, handle = mktemp()
     close(handle)
     zcat=joinpath(Pkg.dir("FASTQDemultiplexer"),"src","zcat.sh")

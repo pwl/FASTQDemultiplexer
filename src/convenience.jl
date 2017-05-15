@@ -10,7 +10,7 @@ function demultiplex(yamlfile::String)
     barcodes = get(config, "cellbarcodes", "")::String
     jobs = get(config, "jobs", Sys.CPU_CORES)::Int
     mergeoutput = get(config, "merge", true)
-
+    maxopenfiles = get(config, "maxopenfiles", 10)
 
     fastqfiles = listfastq(inputdir,interpreter)
 
@@ -22,22 +22,23 @@ function demultiplex(yamlfile::String)
 
     tmpdir=joinpath(outputdir,"tmp")
 
-    @time @sync @parallel for reads in fastqfiles
+    @sync @parallel for reads in fastqfiles
         hs = InputHandle(reads,maxreads=maxreads)
         println("Starting $(basename(hs.name))")
         output = OutputHandler(
             interpreter,
             outputdir = joinpath(tmpdir,hs.name),
             towrite = towrite,
-            cellbarcodes = barcodes)
-        @time FASTQdemultiplex(hs,interpreter,output)
+            cellbarcodes = barcodes,
+            maxopenfiles = maxopenfiles)
+        FASTQdemultiplex(hs,interpreter,output)
         close(hs)
         close(output)
     end
 
     if mergeoutput
         println("Merging files...")
-        @time mergeall(tmpdir,outputdir)
+        mergeall(tmpdir,outputdir)
         rm(tmpdir,force=true,recursive=true)
     end
 
