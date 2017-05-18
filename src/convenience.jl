@@ -72,18 +72,26 @@ function mergeall(outputdir,saveto)
 end
 
 
-function splitunique(flist,ext)
-    flist = filter(f->ismatch(Regex("."*ext*"\$"),basename(f)),flist)
-    basenames = unique(map(basename,flist))
-    names = Dict(bn => sort!(filter(f->bn==basename(f),flist))
-                 for bn in basenames)
+function mergebarcodes(flist,ext,saveto)
+    mkpath(saveto)
+
+    flistfiltered = filter(f->ismatch(Regex("."*ext*"\$"),basename(f)),flist)
+    basenames = map(basename,flistfiltered)
+
+    @sync @parallel for bn in collect(take(unique(basenames),500))
+        positions = basenames .== bn
+        files = flistfiltered[positions]
+        outputfile = joinpath(saveto,bn)
+        catfiles(outputfile,files)
+    end
+    return nothing
 end
 
 
-function mergebarcodes(flist,ext,saveto)
-    mkpath(saveto)
-    @sync @parallel for (bn,files) in [splitunique(flist,ext)...]
-        outputfile = joinpath(saveto,bn)
-        run(pipeline(`cat $files`,stdout=outputfile))
+function catfiles(output,files)
+    fout = open(output,"w")
+    for f in files
+        write(fout,read(f))
     end
+    close(fout)
 end
