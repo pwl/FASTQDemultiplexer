@@ -60,9 +60,11 @@ function interpret!{N}(ir::InterpretedRecord{N},
 end
 
 
+# TODO: put selectedcells and interpreter into a single structure
 function FASTQdemultiplex{N}(ih::InputHandle{N},
                              interpreter::Interpreter{N},
-                             oh::OutputHandler)
+                             outputs,
+                             selectedcells=Set{UInt}[])
 
     ir = InterpretedRecord(interpreter)
 
@@ -74,11 +76,15 @@ function FASTQdemultiplex{N}(ih::InputHandle{N},
 
         if ir.umiid == 0 || ir.cellid == 0
             ir.unmatched = true
-        elseif length(oh.selectedcells) > 0
-            ir.unmatched = !(ir.cellid in oh.selectedcells)
+        elseif length(selectedcells) > 0
+            ir.unmatched = !(ir.cellid in selectedcells)
+        else
+            ir.unmatched = false
         end
 
-        write(oh,ir)
+        for oh in outputs
+            write(oh,ir)
+        end
     end
 
     return nothing

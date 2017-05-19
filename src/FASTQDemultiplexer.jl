@@ -9,7 +9,7 @@ include("utils.jl")
 include("protocol.jl")
 include("input.jl")
 include("base.jl")
-include("output.jl")
+include("output/output.jl")
 include("demultiplexer.jl")
 include("convenience.jl")
 

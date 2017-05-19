@@ -1,42 +1,46 @@
+const defvalues = Dict(:inputdir => ".",
+                       :outputdir => "output",
+                       :maxreads => Inf,
+                       :output => [Dict(:type => "split")],
+                       :jobs => Sys.CPU_CORES,
+                       :mergeoutput => false,
+                       :protocol => "none",
+                       :cellbarcodes => "")
+
+
+keystosym(d)=d
+keystosym(d::AbstractArray)=map(keystosym,d)
+
+function keystosym(d::Dict)
+    Dict(Symbol(k)=>keystosym(v) for (k,v) in d)
+end
+
 function demultiplex(yamlfile::String)
 
-    config = YAML.load_file(yamlfile)
+    userconfig = keystosym(YAML.load_file(yamlfile))
+    config = merge(defvalues,userconfig)
 
-    interpreter = Interpreter(Symbol(get(config, "protocol", "none")))
-    inputdir = get(config,"inputdir", ".")::String
-    outputdir = get(config, "outputdir", joinpath(inputdir,"demultiplexed"))::String
-    maxreads = get(config, "maxreads", Inf)
-    towrite = map(Symbol,get(config, "output", ["insert","umi"])::Vector{String})
-    barcodes = get(config, "cellbarcodes", "")::String
-    jobs = get(config, "jobs", Sys.CPU_CORES)::Int
-    mergeoutput = get(config, "merge", true)
-    maxopenfiles = get(config, "maxopenfiles", 10)
+    interpreter = Interpreter(Symbol(config[:protocol]))
 
-    fastqfiles = listfastq(inputdir,interpreter)
+    cellbarcodes = genselectedcells(config[:cellbarcodes])
+    fastqfiles = listfastq(config[:inputdir],interpreter)
 
-    jobs = min(jobs,length(fastqfiles))-1
+    jobs = min(config[:jobs],length(fastqfiles))-1
     if jobs > 0
         addprocs(jobs)
         @everywhere import FASTQDemultiplexer
     end
 
-    tmpdir=joinpath(outputdir,"tmp")
-
     @sync @parallel for reads in fastqfiles
-        hs = InputHandle(reads,maxreads=maxreads)
+        hs = InputHandle(reads,maxreads=config[:maxreads])
         println("Starting $(basename(hs.name))")
-        output = OutputHandler(
-            interpreter,
-            outputdir = joinpath(tmpdir,hs.name),
-            towrite = towrite,
-            cellbarcodes = barcodes,
-            maxopenfiles = maxopenfiles)
-        FASTQdemultiplex(hs,interpreter,output)
+        output = generateoutput(interpreter,config,hs.name)
+        FASTQdemultiplex(hs,interpreter,output,cellbarcodes)
         close(hs)
-        close(output)
+        map(close,output)
     end
 
-    if mergeoutput
+    if config[:merge]
         println("Merging files...")
         mergeall(tmpdir,outputdir)
         rm(tmpdir,force=true,recursive=true)
@@ -94,4 +98,38 @@ function catfiles(output,files)
         write(fout,read(f))
     end
     close(fout)
+end
+
+
+function genselectedcells(cellbarcodes::String)
+    if cellbarcodes != ""
+        if isfile(cellbarcodes)
+            selectedcells = map(readdlm(cellbarcodes,String)[:,1]) do b
+                gen_id(Vector{UInt8}(b))
+            end
+            return Set{UInt}(selectedcells)
+        else
+            error("Could not find the file $bc")
+        end
+    else
+        return selectedcells=Set{UInt}[]
+    end
+end
+
+
+function generateoutput(interpreter,config,subdir)
+    output = map(config[:output]) do out
+
+        outputdir = joinpath(out[:outputdir],subdir)
+
+        # TODO: move to Output?
+        mkpath(outputdir)
+        Output(Symbol(out[:type]),interpreter;
+               merge(out,Dict(:outputdir=>outputdir))...)
+        # TODO: should this work too?
+        # Output(Symbol(out[:type]),interpreter;
+        #        out..., outputdir = outputdir)
+    end
+    # TODO: is a tuple faster then a vector?
+    return (output...)
 end
