@@ -64,6 +64,34 @@ end
 
 
 """
+the inverse of gen_id, given `i` it returns an associated sequence
+"""
+function idtoname!(name::Vector{UInt8},i::UInt)
+    i-=1
+    for n in length(name):-1:1
+        if i&0b11 $ 0b00 == 0
+            name[n]=UInt8('A')
+        elseif i&0b11 $ 0b01 == 0
+            name[n]=UInt8('C')
+        elseif i&0b11 $ 0b10 == 0
+            name[n]=UInt8('T')
+        elseif i&0b11 $ 0b11 ==0
+            name[n]=UInt8('G')
+        end
+        i>>=2
+    end
+    return name
+end
+
+
+function idtoname(i,len)
+    name = zeros(UInt8,len)
+    idtoname!(name,i)
+    return String(name)
+end
+
+
+"""
 merge the contents of `files` into `output`
 """
 function catfiles(output,files)
