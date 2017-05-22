@@ -31,19 +31,20 @@ function demultiplex(yamlfile::String)
         @everywhere import FASTQDemultiplexer
     end
 
-    @sync @parallel for reads in fastqfiles
+    outputs = pmap(fastqfiles) do reads
         hs = InputHandle(reads,maxreads=config[:maxreads])
         println("Starting $(basename(hs.name))")
         output = generateoutput(interpreter,config,hs.name)
         FASTQdemultiplex(hs,interpreter,output,cellbarcodes)
         close(hs)
         map(close,output)
+        output
     end
 
-    if config[:merge]
-        println("Merging files...")
-        mergeall(tmpdir,outputdir)
-        rm(tmpdir,force=true,recursive=true)
+    for i in 1:length(config[:output])
+        println("Merging $(config[:output][i][:type])")
+        outputi = [out[i] for out in outputs]
+        @time mergeoutput(outputi; outputdir = config[:output][i][:outputdir])
     end
 
     return nothing
@@ -51,54 +52,22 @@ function demultiplex(yamlfile::String)
 end
 
 
-function mergeall(outputdir,saveto)
-    flist=String[]
-    rawlist=String[]
-    for dir in readdir(outputdir)
-        dirraw = joinpath(outputdir,dir,"raw")
-        if isdir(dirraw)
-            for f in readdir(dirraw)
-                push!(rawlist,joinpath(dirraw,f))
-            end
-        end
+function generateoutput(interpreter,config,subdir)
+    output = map(config[:output]) do out
 
-        dirinsert = joinpath(outputdir,dir,"insert")
-        if isdir(dirinsert)
-            for f in readdir(dirinsert)
-                push!(flist,joinpath(dirinsert,f))
-            end
-        end
+        outputdir = joinpath(out[:outputdir],subdir)
+
+        # TODO: move to Output?
+        Output(Symbol(out[:type]),interpreter;
+               merge(out,Dict(:outputdir=>outputdir))...)
+        # TODO: should this work too?
+        # Output(Symbol(out[:type]),interpreter;
+        #        out..., outputdir = outputdir)
     end
-
-    mergebarcodes(flist,"umi",joinpath(saveto,"insert"))
-    mergebarcodes(flist,"fastq",joinpath(saveto,"insert"))
-    mergebarcodes(rawlist,"fastq",joinpath(saveto,"raw"))
+    # TODO: is a tuple faster then a vector?
+    return (output...)
 end
 
-
-function mergebarcodes(flist,ext,saveto)
-    mkpath(saveto)
-
-    flistfiltered = filter(f->ismatch(Regex("."*ext*"\$"),basename(f)),flist)
-    basenames = map(basename,flistfiltered)
-
-    @sync @parallel for bn in collect(take(unique(basenames),500))
-        positions = basenames .== bn
-        files = flistfiltered[positions]
-        outputfile = joinpath(saveto,bn)
-        catfiles(outputfile,files)
-    end
-    return nothing
-end
-
-
-function catfiles(output,files)
-    fout = open(output,"w")
-    for f in files
-        write(fout,read(f))
-    end
-    close(fout)
-end
 
 
 function genselectedcells(cellbarcodes::String)
@@ -114,22 +83,4 @@ function genselectedcells(cellbarcodes::String)
     else
         return selectedcells=Set{UInt}[]
     end
-end
-
-
-function generateoutput(interpreter,config,subdir)
-    output = map(config[:output]) do out
-
-        outputdir = joinpath(out[:outputdir],subdir)
-
-        # TODO: move to Output?
-        mkpath(outputdir)
-        Output(Symbol(out[:type]),interpreter;
-               merge(out,Dict(:outputdir=>outputdir))...)
-        # TODO: should this work too?
-        # Output(Symbol(out[:type]),interpreter;
-        #        out..., outputdir = outputdir)
-    end
-    # TODO: is a tuple faster then a vector?
-    return (output...)
 end

@@ -60,3 +60,16 @@ function gen_id(seq::Vector{UInt8})
     # inproper sequence.
     return i+1
 end
+
+
+
+"""
+merge the contents of `files` into `output`
+"""
+function catfiles(output,files)
+    fout = open(output,"w")
+    for f in files
+        write(fout,read(f))
+    end
+    close(fout)
+end

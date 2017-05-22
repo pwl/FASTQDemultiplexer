@@ -10,5 +10,7 @@ function Output(sym::Symbol,interpreter::Interpreter; kwargs...)
     end
 end
 
+mergeoutput{O<:Output}(::Vector{O}; kwargs...) = nothing
+
 include("filtered.jl")
 include("split.jl")

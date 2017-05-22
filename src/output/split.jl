@@ -3,11 +3,13 @@
 ####################
 
 
-type OutputSplit{F}
+type OutputSplit{F} <: Output
     cellhandles::Dict{UInt,FASTQ.Writer}
     umihandles::Dict{UInt,IOStream}
+    cellpaths::Dict{UInt,String}
     namegen::F
     maxopenfiles::Int
+    outputdir::String
 end
 
 
@@ -16,14 +18,18 @@ function OutputSplit(protocol::Interpreter;
                      maxopenfiles::Int = 1000,
                      kwargs...)
 
+    mkpath(outputdir)
+
     namegen(cellid, unmatched) =
         joinpath(outputdir,
                  unmatched ? "unmatched" : String(cellid))
 
     return OutputSplit(Dict{UInt,FASTQ.Writer}(),
                        Dict{UInt,IOStream}(),
+                       Dict{UInt,String}(),
                        namegen,
-                       maxopenfiles)
+                       maxopenfiles,
+                       outputdir)
 end
 
 """
@@ -34,8 +40,9 @@ end
 function Base.write(oh::OutputSplit, ir::InterpretedRecord)
     if !ir.unmatched
         closetoomanyfiles!(oh)
-        write_insert(oh,ir)
-        write_umi(oh,ir)
+        writeinsert(oh,ir)
+        writeumi(oh,ir)
+        addpath(oh,ir)
     end
 end
 
@@ -59,7 +66,7 @@ function closetoomanyfiles!{N}(oh::OutputSplit{N})
 end
 
 
-function write_insert(oh::OutputSplit,ir::InterpretedRecord)
+function writeinsert(oh::OutputSplit,ir::InterpretedRecord)
 
     writeid = ir.unmatched ? UInt(0) : ir.cellid
 
@@ -73,7 +80,7 @@ function write_insert(oh::OutputSplit,ir::InterpretedRecord)
 end
 
 
-function write_umi(oh::OutputSplit,ir::InterpretedRecord)
+function writeumi(oh::OutputSplit,ir::InterpretedRecord)
 
     writeid = ir.unmatched ? UInt(0) : ir.cellid
     umidesc = get!(oh.umihandles, writeid) do
@@ -83,6 +90,52 @@ function write_umi(oh::OutputSplit,ir::InterpretedRecord)
     write(umidesc,'\n')
 
     return nothing
+end
+
+
+function addpath(oh::OutputSplit,ir::InterpretedRecord)
+    writeid = ir.unmatched ? UInt(0) : ir.cellid
+    get!(oh.cellpaths, writeid) do
+        oh.namegen(ir.cell, ir.unmatched)
+    end
+    return nothing
+end
+
+
+function mergeoutput{N}(outputs::Vector{OutputSplit{N}};
+                        outputdir::String = ".",
+                        kwargs...)
+
+    # 1) merge the cell barcodes
+    paths = Dict{UInt,Vector{String}}()
+    for o in outputs
+        for (id,path) in o.cellpaths
+            pbase = get!(paths, id) do
+                String[]
+            end
+            push!(pbase,path)
+        end
+    end
+
+    # 2) for each cellid concatenate the contents of all files into
+    # one and remove the directories
+    pmap(values(paths)) do ps
+        mergecellid(outputdir,ps,".umi")
+        mergecellid(outputdir,ps,".fastq")
+    end
+
+    # 3) clean up the directories
+    pmap(outputs) do oh
+        rm(oh.outputdir,force=true,recursive=true)
+    end
+end
+
+
+function mergecellid(outputdir,path,ext)
+    outfile = joinpath(outputdir,basename(path[1])*ext)
+    infiles = map(f->f*ext,path)
+    catfiles(outfile,infiles)
+    map(rm, infiles)
 end
 
 
