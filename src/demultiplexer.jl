@@ -61,10 +61,10 @@ end
 
 
 # TODO: put selectedcells and interpreter into a single structure
-function FASTQdemultiplex{N}(ih::InputHandle{N},
-                             interpreter::Interpreter{N},
-                             outputs,
-                             selectedcells=Set{UInt}[])
+function demultiplex{N}(ih::InputHandle{N},
+                        interpreter::Interpreter{N},
+                        outputs,
+                        selectedcells=Set{UInt}[])
 
     ir = InterpretedRecord(interpreter)
 
@@ -85,6 +85,44 @@ function FASTQdemultiplex{N}(ih::InputHandle{N},
         for oh in outputs
             write(oh,ir)
         end
+    end
+
+    return nothing
+end
+
+
+# TODO improve on this type a little bit more
+type Demultiplexer{N}
+    inputs::Vector{InputHandle{N}}
+    interpreter::Interpreter{N}
+    selectedcells::Set{UInt}
+    # TODO: this is not type stable
+    outputs::Vector
+end
+
+
+function demultiplex(dem::Demultiplexer)
+
+    results = pmap(dem.inputs) do input
+        inputname = basename(input.name)
+        println("Starting $inputname")
+
+        outputs = map(dem.outputs) do out
+            T, options = out
+            tmpdir = joinpath(options[:outputdir],inputname)
+            T(dem.interpreter; merge(options,Dict(:outputdir=>tmpdir))...)
+        end
+
+        demultiplex(input,dem.interpreter,outputs,dem.selectedcells)
+        close(input)
+        map(close,outputs)
+        outputs
+    end
+
+    for (i,(res, out)) in enumerate(zip(results,dem.outputs))
+        println("Merging $(typeof(res))")
+        resi = [r[i] for r in results]
+        @time mergeoutput(resi; outputdir = out[2][:outputdir])
     end
 
     return nothing

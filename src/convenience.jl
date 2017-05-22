@@ -11,9 +11,11 @@ const defvalues = Dict(:inputdir => ".",
 keystosym(d)=d
 keystosym(d::AbstractArray)=map(keystosym,d)
 
+
 function keystosym(d::Dict)
     Dict(Symbol(k)=>keystosym(v) for (k,v) in d)
 end
+
 
 function demultiplex(yamlfile::String)
 
@@ -31,43 +33,25 @@ function demultiplex(yamlfile::String)
         @everywhere import FASTQDemultiplexer
     end
 
-    outputs = pmap(fastqfiles) do reads
-        hs = InputHandle(reads,maxreads=config[:maxreads])
-        println("Starting $(basename(hs.name))")
-        output = generateoutput(interpreter,config,hs.name)
-        FASTQdemultiplex(hs,interpreter,output,cellbarcodes)
-        close(hs)
-        map(close,output)
-        output
+    inputs = map(fastqfiles) do reads
+        InputHandle(reads,maxreads=config[:maxreads])
     end
 
-    for i in 1:length(config[:output])
-        println("Merging $(config[:output][i][:type])")
-        outputi = [out[i] for out in outputs]
-        @time mergeoutput(outputi; outputdir = config[:output][i][:outputdir])
+    symtocons = Dict("split" => OutputSplit,
+                     "filtered"=> OutputFiltered)
+
+    cons = map(config[:output]) do out
+        @show out
+        symtocons[out[:type]], out
     end
+
+    demultiplexer = Demultiplexer(inputs,interpreter,cellbarcodes,cons)
+
+    FASTQdemultiplex(demultiplexer)
 
     return nothing
 
 end
-
-
-function generateoutput(interpreter,config,subdir)
-    output = map(config[:output]) do out
-
-        outputdir = joinpath(out[:outputdir],subdir)
-
-        # TODO: move to Output?
-        Output(Symbol(out[:type]),interpreter;
-               merge(out,Dict(:outputdir=>outputdir))...)
-        # TODO: should this work too?
-        # Output(Symbol(out[:type]),interpreter;
-        #        out..., outputdir = outputdir)
-    end
-    # TODO: is a tuple faster then a vector?
-    return (output...)
-end
-
 
 
 function genselectedcells(cellbarcodes::String)
