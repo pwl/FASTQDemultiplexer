@@ -11,6 +11,5 @@ include("input.jl")
 include("base.jl")
 include("output/output.jl")
 include("demultiplexer.jl")
-include("convenience.jl")
 
 end # module

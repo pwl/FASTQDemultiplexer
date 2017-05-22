@@ -73,3 +73,30 @@ function catfiles(output,files)
     end
     close(fout)
 end
+
+
+"""
+generate a list of cell ids from a file containing cell barcodes
+"""
+function genselectedcells(cellbarcodes::Vector{String})
+    selectedcells = map(cellbarcodes) do b
+        gen_id(Vector{UInt8}(b))
+    end
+    return Set{UInt}(selectedcells)
+end
+
+
+"""
+Same as above but reads the ids from a file.
+"""
+function genselectedcells(cellbarcodes::String)
+    if cellbarcodes != ""
+        if isfile(cellbarcodes)
+            return genselectedcells(readdlm(cellbarcodes,String)[:,1])
+        else
+            error("Could not find the file $bc")
+        end
+    else
+        return selectedcells=Set{UInt}[]
+    end
+end
