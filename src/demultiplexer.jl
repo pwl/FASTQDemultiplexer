@@ -91,19 +91,26 @@ function demultiplex{N}(ih::InputHandle{N},
 end
 
 
-# TODO improve on this type a little bit more
+# TODO this type is a duck tape work and needs to be improved.  To do
+# that I have to improve the input type for it to use an open--like
+# constructor: store the file names in one type and open them to
+# construct another (closable) type.
 type Demultiplexer{N}
-    inputs::Vector{InputHandle{N}}
     interpreter::Interpreter{N}
     selectedcells::Set{UInt}
     # TODO: this is not type stable
     outputs::Vector
+    inputdir::String
+    # for debugging purposes
+    maxreads
 end
 
 
 function demultiplex(dem::Demultiplexer)
+    fastqfiles = listfastq(dem.inputdir,dem.interpreter)
 
-    results = pmap(dem.inputs) do input
+    results = pmap(fastqfiles) do fastq
+        input = InputHandle(fastq,maxreads=dem.maxreads)
         inputname = basename(input.name)
         println("Starting $inputname")
 
@@ -120,7 +127,7 @@ function demultiplex(dem::Demultiplexer)
     end
 
     for (i,(res, out)) in enumerate(zip(results,dem.outputs))
-        println("Merging $(typeof(res))")
+        println("Merging $(eltype(res))")
         resi = [r[i] for r in results]
         @time mergeoutput(resi; outputdir = out[2][:outputdir])
     end

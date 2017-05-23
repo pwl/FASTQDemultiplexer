@@ -1,0 +1,29 @@
+# Pre-alignment statistics #
+
+```{julia;echo=false}
+import Weave
+Weave.set_chunk_defaults(Dict{Symbol, Any}(
+    :echo => false
+))
+```
+
+```julia
+using Plots
+plotly();
+counts = WEAVE_ARGS["counts"]
+cellnames = WEAVE_ARGS["cellnames"]
+uminames = WEAVE_ARGS["uminames"]
+```
+
+#### Number of reads ####
+
+```julia
+begin
+    plt = bar(cellnames,sum(counts,2)[:,1],xrotation=90)
+    display(plt)
+end
+begin
+    plt = bar(uminames,sum(counts,1)[1,:],xrotation=90)
+    display(plt)
+end
+```
