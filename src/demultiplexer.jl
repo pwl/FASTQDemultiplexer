@@ -60,11 +60,10 @@ function interpret!{N}(ir::InterpretedRecord{N},
 end
 
 
-# TODO: put selectedcells and interpreter into a single structure
 function demultiplex{N}(ih::InputHandle{N},
                         interpreter::Interpreter{N},
                         outputs,
-                        selectedcells=Set{UInt}[])
+                        barcodes::Barcodes)
 
     ir = InterpretedRecord(interpreter)
 
@@ -76,10 +75,10 @@ function demultiplex{N}(ih::InputHandle{N},
 
         if ir.umiid == 0 || ir.cellid == 0
             ir.unmatched = true
-        elseif length(selectedcells) > 0
-            ir.unmatched = !(ir.cellid in selectedcells)
+            ir.groupid, ir.groupname = -1, "unassigned"
         else
-            ir.unmatched = false
+            ir.groupid, ir.groupname = getgroup(barcodes,ir.cellid)
+            ir.unmatched = ir.groupid == -1
         end
 
         for oh in outputs
@@ -97,7 +96,7 @@ end
 # construct another (closable) type.
 type Demultiplexer{N}
     interpreter::Interpreter{N}
-    selectedcells::Set{UInt}
+    barcodes::Barcodes
     # TODO: this is not type stable
     outputs::Vector
     inputdir::String
@@ -120,7 +119,7 @@ function demultiplex(dem::Demultiplexer)
             T(dem.interpreter; merge(options,Dict(:outputdir=>tmpdir))...)
         end
 
-        demultiplex(input,dem.interpreter,outputs,dem.selectedcells)
+        demultiplex(input,dem.interpreter,outputs,dem.barcodes)
         close(input)
         map(close,outputs)
         outputs

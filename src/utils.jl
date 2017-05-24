@@ -84,7 +84,7 @@ function idtoname!(name::Vector{UInt8},i::UInt)
 end
 
 
-function idtoname(i,len)
+function idtoname(i::UInt,len::Int)
     name = zeros(UInt8,len)
     idtoname!(name,i)
     return String(name)
@@ -100,31 +100,4 @@ function catfiles(output,files)
         write(fout,read(f))
     end
     close(fout)
-end
-
-
-"""
-generate a list of cell ids from a file containing cell barcodes
-"""
-function genselectedcells(cellbarcodes::Vector{String})
-    selectedcells = map(cellbarcodes) do b
-        gen_id(Vector{UInt8}(b))
-    end
-    return Set{UInt}(selectedcells)
-end
-
-
-"""
-Same as above but reads the ids from a file.
-"""
-function genselectedcells(cellbarcodes::String)
-    if cellbarcodes != ""
-        if isfile(cellbarcodes)
-            return genselectedcells(readdlm(cellbarcodes,String)[:,1])
-        else
-            error("Could not find the file $bc")
-        end
-    else
-        return selectedcells=Set{UInt}[]
-    end
 end
