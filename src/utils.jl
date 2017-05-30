@@ -62,6 +62,8 @@ function gen_id(seq::Vector{UInt8})
 end
 
 
+gen_id(seq::String) = gen_id(Vector{UInt8}(seq))
+
 
 """
 the inverse of gen_id, given `i` it returns an associated sequence

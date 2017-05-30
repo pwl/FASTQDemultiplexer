@@ -1,7 +1,7 @@
 using YAML
 using Iterators
 
-immutable Interpreter{N}
+immutable Interpreter{N,C,U}
     insertread::Int
     insertpos::UnitRange{Int}
     cellpos::NTuple{N,UnitRange{Int}}
@@ -71,9 +71,12 @@ function Interpreter(yamlfile::String)
 
     end
 
-    return Interpreter{nreads}(insertread,insertpos,
-                               (cellpos...),
-                               (umipos...),
-                               (readnames...))
+    C = sum(map(length,cellpos))
+    U = sum(map(length,umipos))
+
+    return Interpreter{nreads,C,U}(insertread,insertpos,
+                                   (cellpos...),
+                                   (umipos...),
+                                   (readnames...))
 
 end

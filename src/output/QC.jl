@@ -2,8 +2,7 @@ using Weave
 
 
 type OutputQC <: Output
-    cellid::Vector{UInt}
-    umiid::Vector{UInt}
+    # results::DataFrame
     cellbclen::UInt
     umibclen::UInt
     selectedcells::Vector{UInt}

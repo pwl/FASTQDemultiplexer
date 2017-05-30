@@ -68,7 +68,7 @@ end
 
 function writeinsert(oh::OutputSplit,ir::InterpretedRecord)
 
-    writeid = ir.unmatched ? UInt(0) : ir.cellid
+    writeid = ir.unmatched ? UInt(0) : ir.cellid.val
 
     celldesc = get!(oh.cellhandles, writeid) do
         filename = oh.namegen(ir.cell, ir.unmatched)*".fastq"
@@ -82,7 +82,7 @@ end
 
 function writeumi(oh::OutputSplit,ir::InterpretedRecord)
 
-    writeid = ir.unmatched ? UInt(0) : ir.cellid
+    writeid = ir.unmatched ? UInt(0) : ir.cellid.val
     umidesc = get!(oh.umihandles, writeid) do
         open(oh.namegen(ir.cell, ir.unmatched)*".umi", "w+")
     end
@@ -94,7 +94,7 @@ end
 
 
 function addpath(oh::OutputSplit,ir::InterpretedRecord)
-    writeid = ir.unmatched ? UInt(0) : ir.cellid
+    writeid = ir.unmatched ? UInt(0) : ir.cellid.val
     get!(oh.cellpaths, writeid) do
         oh.namegen(ir.cell, ir.unmatched)
     end
