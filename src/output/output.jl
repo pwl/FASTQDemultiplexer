@@ -5,4 +5,3 @@ Base.close(::Output) = nothing
 
 include("filtered.jl")
 include("split.jl")
-include("QC.jl")
