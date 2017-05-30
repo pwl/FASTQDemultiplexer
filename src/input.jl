@@ -75,7 +75,7 @@ reads.  The reads can then be opened with InputHandle
 
 """
 
-function listfastq{N}(inputdir, protocol::Interpreter{N})
+function listfastq{N}(inputdir, protocol::Protocol{N})
     # TODO: improve the pattern matching, this approach is probably not good enough
     patterns = map(Regex,protocol.readnames)
     filenames = map(f->joinpath(inputdir,f),readdir(inputdir))

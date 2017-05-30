@@ -10,7 +10,7 @@ type OutputFiltered{N} <: Output
 end
 
 
-function OutputFiltered{N}(protocol::Interpreter{N};
+function OutputFiltered{N}(protocol::Protocol{N};
                            outputdir::String = ".",
                            kwargs...)
 

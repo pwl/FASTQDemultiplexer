@@ -13,7 +13,7 @@ type OutputSplit{F} <: Output
 end
 
 
-function OutputSplit(protocol::Interpreter;
+function OutputSplit(protocol::Protocol;
                      outputdir::String = ".",
                      maxopenfiles::Int = 1000,
                      kwargs...)

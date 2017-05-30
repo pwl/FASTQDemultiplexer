@@ -11,7 +11,7 @@ type InterpretedRecord{N,C,U}
 end
 
 
-function InterpretedRecord{N,C,U}(interpreter::Interpreter{N,C,U})
+function InterpretedRecord{N,C,U}(protocol::Protocol{N,C,U})
     umi = Array(UInt8,U)
     cell = Array(UInt8,C)
     output = FASTQ.Record()
@@ -56,14 +56,14 @@ end
 
 
 function interpret!{N,C,U}(ir::InterpretedRecord{N,C,U},
-                           interpreter::Interpreter{N,C,U},
+                           protocol::Protocol{N,C,U},
                            barcodes::Barcodes)
 
-    extract!(ir.cell, ir.records, interpreter.cellpos)
-    extract!(ir.umi, ir.records, interpreter.umipos)
+    extract!(ir.cell, ir.records, protocol.cellpos)
+    extract!(ir.umi, ir.records, protocol.umipos)
 
-    insertid = interpreter.insertread
-    insertpos = interpreter.insertpos
+    insertid = protocol.insertread
+    insertpos = protocol.insertpos
 
     recordview!(ir.output, ir.records[insertid], insertpos)
 

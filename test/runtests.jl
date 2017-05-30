@@ -3,7 +3,7 @@ using Bio.Seq.FASTQ
 using Base.Test
 
 import FASTQDemultiplexer: idtoname, gen_id, Barcodes, Barcode,
-    Interpreter, InterpretedRecord, getgroup, interpret!
+    Protocol, InterpretedRecord, getgroup, interpret!
 
 # utils
 @testset "utils" begin
@@ -37,15 +37,15 @@ end
 end
 
 
-@testset "interpreter" begin
+@testset "protocol" begin
 
-    mars = Interpreter(:marsseq)
-    drop = Interpreter(:dropseq)
-    x10 = Interpreter(:x10)
+    mars = Protocol(:marsseq)
+    drop = Protocol(:dropseq)
+    x10 = Protocol(:x10)
 
-    @test typeof(mars) == Interpreter{2,10,6}
-    @test typeof(drop) == Interpreter{2,12,8}
-    @test typeof(x10) == Interpreter{3,16,10}
+    @test typeof(mars) == Protocol{2,10,6}
+    @test typeof(drop) == Protocol{2,12,8}
+    @test typeof(x10) == Protocol{3,16,10}
 
     @test mars.insertread == 1
     @test mars.insertpos == 8:60
@@ -66,7 +66,7 @@ end
 
 @testset "record" begin
     N = 2; C = 4; U = 2;
-    inter = Interpreter{N,C,U}(1,5:12,(2:3,3:4),(1:0,1:2),("R1","R2"))
+    inter = Protocol{N,C,U}(1,5:12,(2:3,3:4),(1:0,1:2),("R1","R2"))
     ir = InterpretedRecord(inter)
 
     ir.records = map(("data/r1.fastq","data/r2.fastq")) do file
