@@ -4,7 +4,9 @@ end
 
 Barcode(v::Vector{UInt8}) = Barcode{length(v)}(gen_id(v))
 Base.isnull(bc::Barcode) = bc.val != 0
-Base.String{L}(bc::Barcode{L}) = idtoname(bc.val,L)
+# Base.String{L}(bc::Barcode{L}) = idtoname(bc.val,L)
+Base.convert(::Type{UInt},bc::Barcode) = bc.val
+Base.convert{L}(::Type{String},bc::Barcode{L}) = idtoname(bc.val,L)
 
 immutable Barcodes{N}
     groups::NTuple{N,Set{UInt}}

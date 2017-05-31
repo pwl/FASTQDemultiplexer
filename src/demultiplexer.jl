@@ -55,11 +55,18 @@ function demultiplex(dem::Demultiplexer)
         outputs
     end
 
-    for (i,(res, out)) in enumerate(zip(results,dem.outputs))
-        println("Merging $(eltype(res))")
+    pmap(1:length(dem.outputs)) do i
+        out = dem.outputs[i]
         resi = [r[i] for r in results]
-        @time mergeoutput(resi; outputdir = out[2][:outputdir])
+        println("Merging $(eltype(resi))")
+        @time mergeoutput(resi; out[2]...)
     end
+
+    # for (i,(res, out)) in enumerate(zip(results,dem.outputs))
+    #     resi = [r[i] for r in results]
+    #     println("Merging $(eltype(resi))")
+    #     @time mergeoutput(resi; out[2]...)
+    # end
 
     return nothing
 end
