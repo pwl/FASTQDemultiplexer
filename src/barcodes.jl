@@ -33,7 +33,7 @@ function getbarcodes(file::String)
         end
         return bcodes
     else
-        error("Could not find the file $bc")
+        error("Could not find the file $file")
     end
 end
 
