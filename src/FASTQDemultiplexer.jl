@@ -1,8 +1,6 @@
 module FASTQDemultiplexer
 
-using Bio
-using Bio.Seq
-using Bio.Seq.FASTQ
+using BioSequences.FASTQ
 
 include("utils.jl")
 include("protocol.jl")
