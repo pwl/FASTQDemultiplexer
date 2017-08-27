@@ -38,6 +38,10 @@ end
 function demultiplex(dem::Demultiplexer)
     fastqfiles = listfastq(dem.inputdir,dem.protocol)
 
+    if isempty(fastqfiles)
+        error("No supported FASTQ files found.")
+    end
+
     results = pmap(fastqfiles) do fastq
         input = InputHandle(fastq,maxreads=dem.maxreads)
         inputname = basename(input.name)
@@ -46,7 +50,7 @@ function demultiplex(dem::Demultiplexer)
         outputs = map(dem.outputs) do out
             T, options = out
             tmpdir = joinpath(options[:outputdir],inputname)
-            T(dem.protocol; merge(options,Dict(:outputdir=>tmpdir))...)
+            T(dem.protocol, dem.barcodes; merge(options,Dict(:outputdir=>tmpdir))...)
         end
 
         demultiplex(input,dem.protocol,outputs,dem.barcodes)
@@ -57,7 +61,7 @@ function demultiplex(dem::Demultiplexer)
 
     pmap(1:length(dem.outputs)) do i
         out = dem.outputs[i]
-        resi = [r[i] for r in results]
+        resi = [r[i] for r in results]::typeof(results[1])
         println("Merging $(eltype(resi))")
         @time mergeoutput(resi; out[2]...)
     end

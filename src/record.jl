@@ -6,14 +6,18 @@ type InterpretedRecord{N,C,U}
     unmatched::Bool
     cellid::Barcode{C}
     umiid::Barcode{U}
-    groupid::Int
+    groupid::Int8
     groupname::String
 end
 
 
+cellid(ir::InterpretedRecord)=ir.cellid.val
+umiid(ir::InterpretedRecord)=ir.umiid.val
+
+
 function InterpretedRecord{N,C,U}(protocol::Protocol{N,C,U})
-    umi = Array(UInt8,U)
-    cell = Array(UInt8,C)
+    umi = Array{UInt8}(U)
+    cell = Array{UInt8}(C)
     output = FASTQ.Record()
     records = map(x->FASTQ.Record(),1:N)
     return InterpretedRecord{N,C,U}(

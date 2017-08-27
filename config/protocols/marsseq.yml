@@ -5,7 +5,9 @@ reads:
   - name: R1
     insert: 8:60
     cell: 4:7
+    length: 60
 
   - name: R2
     cell: 1:6
     umi: 7:12
+    length: 12

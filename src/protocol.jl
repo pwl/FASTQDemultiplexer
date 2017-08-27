@@ -7,9 +7,11 @@ immutable Protocol{N,C,U}
     cellpos::NTuple{N,UnitRange{Int}}
     umipos::NTuple{N,UnitRange{Int}}
     readnames::NTuple{N,String}
+    readlengths::NTuple{N,Int}
 end
 
-const config_path = joinpath(Pkg.dir("FASTQDemultiplexer"),"config","protocols")
+# const config_path = joinpath(Pkg.dir("FASTQDemultiplexer"),"config","protocols")
+const config_path = joinpath(@__DIR__,"..","config","protocols")
 const protocol_config_paths = Dict(:marsseq => joinpath(config_path,"marsseq.yml"),
                                    :dropseq => joinpath(config_path,"dropseq.yml"),
                                    :x10 => joinpath(config_path,"10x.yml"))
@@ -31,9 +33,10 @@ function Protocol(yamlfile::String)
 
     nreads = length(config["reads"])
 
-    cellpos = Array(UnitRange{Int}, nreads)
-    umipos  = Array(UnitRange{Int}, nreads)
-    readnames = Array(String, nreads)
+    cellpos = Array{UnitRange{Int}}(nreads)
+    umipos  = Array{UnitRange{Int}}(nreads)
+    readnames = Array{String}(nreads)
+    readlengths = Array{Int}(nreads)
     insertpos = 1:0
     insertread = 0
     insertdefined = false
@@ -69,14 +72,26 @@ function Protocol(yamlfile::String)
             error("Name of the read is required")
         end
 
+        if haskey(read,"length")
+            readlengths[i]=read["length"]
+        else
+            error("Length of the read is required")
+        end
+
     end
 
     C = sum(map(length,cellpos))
     U = sum(map(length,umipos))
 
-    return Protocol{nreads,C,U}(insertread,insertpos,
-                                   (cellpos...),
-                                   (umipos...),
-                                   (readnames...))
+    return Protocol{nreads,C,U}(insertread,
+                                insertpos,
+                                (cellpos...),
+                                (umipos...),
+                                (readnames...),
+                                (readlengths...))
 
 end
+
+cellidtoname(id::UInt,::Protocol{N,C,U}) where {N,C,U} = idtoname(id,C)
+
+umiidtoname(id::UInt,::Protocol{N,C,U}) where {N,C,U} = idtoname(id,U)
