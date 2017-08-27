@@ -1,6 +1,7 @@
 module FASTQDemultiplexer
 
 using BioSequences.FASTQ
+using YAML
 
 include("utils.jl")
 include("protocol.jl")

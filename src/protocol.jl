@@ -1,6 +1,3 @@
-using YAML
-using Iterators
-
 immutable Protocol{N,C,U}
     insertread::Int
     insertpos::UnitRange{Int}
